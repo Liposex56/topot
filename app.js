@@ -17,6 +17,7 @@ const els = {
   canvasWrap: document.querySelector("#canvasWrap"),
   addRow: document.querySelector("#addRowBtn"),
   fit: document.querySelector("#fitBtn"),
+  center: document.querySelector("#centerBtn"),
   zoomIn: document.querySelector("#zoomInBtn"),
   zoomOut: document.querySelector("#zoomOutBtn"),
   sample: document.querySelector("#sampleBtn"),
@@ -28,6 +29,7 @@ const els = {
   importFile: document.querySelector("#importFile"),
   newProject: document.querySelector("#newProjectBtn"),
   saveProject: document.querySelector("#saveProjectBtn"),
+  openProject: document.querySelector("#openProjectBtn"),
   undo: document.querySelector("#undoBtn"),
   redo: document.querySelector("#redoBtn"),
   projectName: document.querySelector("#projectName"),
@@ -43,6 +45,14 @@ const els = {
   zonesList: document.querySelector("#zonesList"),
   addZone: document.querySelector("#addZoneBtn"),
   activeZone: document.querySelector("#activeZoneSelect"),
+  activeZoneName: document.querySelector("#activeZoneName"),
+  activeZoneColor: document.querySelector("#activeZoneColor"),
+  activeZoneType: document.querySelector("#activeZoneType"),
+  activeZoneClosed: document.querySelector("#activeZoneClosed"),
+  toolbarToggle: document.querySelector("#toolbarToggleBtn"),
+  toolbarControls: document.querySelector("#toolbarControls"),
+  configToggle: document.querySelector("#configToggleBtn"),
+  configContent: document.querySelector("#configContent"),
   zoneDialog: document.querySelector("#zoneDialog"),
   zoneForm: document.querySelector("#zoneForm"),
   zoneDialogTitle: document.querySelector("#zoneDialogTitle"),
@@ -775,6 +785,27 @@ function renderZoneSelectors() {
     els.activeZone.appendChild(option);
   });
   els.addRow.disabled = !state.zones.some((zone) => zone.id === state.activeZoneId);
+  syncActiveZoneControls();
+}
+
+function syncActiveZoneControls() {
+  const zone = state.zones.find((item) => item.id === state.activeZoneId);
+  const disabled = !zone;
+  els.activeZoneName.disabled = disabled;
+  els.activeZoneColor.disabled = disabled;
+  els.activeZoneType.disabled = disabled;
+  els.activeZoneClosed.disabled = disabled || zone?.type !== "polygon";
+  if (!zone) {
+    els.activeZoneName.value = "";
+    els.activeZoneColor.value = "#31b6d5";
+    els.activeZoneType.value = "polygon";
+    els.activeZoneClosed.checked = false;
+    return;
+  }
+  if (document.activeElement !== els.activeZoneName) els.activeZoneName.value = zone.name;
+  if (document.activeElement !== els.activeZoneColor) els.activeZoneColor.value = zone.color;
+  els.activeZoneType.value = zone.type;
+  els.activeZoneClosed.checked = zone.type === "polygon" && zone.closed;
 }
 
 function renderZones(survey) {
@@ -1121,7 +1152,7 @@ function drawPlot(survey) {
   const y = (north) => margin.top + (1 - (north - northAxis.min) / (northAxis.max - northAxis.min)) * plotH;
   plotTransform = { eastAxis, northAxis, plotW, plotH, margin };
 
-  ctx.fillStyle = "#fbfcfa";
+  ctx.fillStyle = "#0b1115";
   ctx.fillRect(0, 0, width, height);
   drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height);
 
@@ -1139,7 +1170,7 @@ function drawPlot(survey) {
   drawStationCoords(ctx, x(station.east), y(station.north), station);
   drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin);
 
-  ctx.fillStyle = "#5d6d76";
+  ctx.fillStyle = "#b6c5cc";
   ctx.font = "700 12px Segoe UI, Arial";
   ctx.fillText("Este (E)", margin.left + plotW - 52, height - 9);
   ctx.fillText("Norte (N)", margin.left, 16);
@@ -1147,8 +1178,8 @@ function drawPlot(survey) {
 
 function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height) {
   if (state.showGrid) {
-    ctx.strokeStyle = "rgba(24, 33, 38, 0.12)";
-    ctx.fillStyle = "#61717a";
+    ctx.strokeStyle = "rgba(92, 152, 176, 0.2)";
+    ctx.fillStyle = "#9fb1ba";
     ctx.lineWidth = 1;
     ctx.font = "11px Segoe UI, Arial";
     eastAxis.ticks.forEach((value) => {
@@ -1168,7 +1199,7 @@ function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, h
       ctx.fillText(formatNumber(value, state.axisDecimals), 8, py + 4);
     });
   }
-  ctx.strokeStyle = "#182126";
+  ctx.strokeStyle = "#8fa4ae";
   ctx.lineWidth = 1.3;
   ctx.beginPath();
   ctx.moveTo(margin.left, margin.top + plotH);
@@ -1210,14 +1241,14 @@ function drawPoint(ctx, x, y, label, color, station = false) {
   ctx.arc(x, y, station ? 7 : 5.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#182126";
+  ctx.fillStyle = "#edf5f7";
   ctx.font = "700 11px Segoe UI, Arial";
   ctx.fillText(String(label || "?"), x + 8, y - 8);
 }
 
 function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
   ctx.save();
-  ctx.strokeStyle = "rgba(182, 81, 40, 0.58)";
+  ctx.strokeStyle = "rgba(239, 107, 94, 0.66)";
   ctx.lineWidth = 1.2;
   ctx.setLineDash([5, 5]);
   ctx.beginPath();
@@ -1230,7 +1261,7 @@ function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
 }
 
 function drawStationCoords(ctx, x, y, station) {
-  ctx.fillStyle = "#5d6d76";
+  ctx.fillStyle = "#c1d0d6";
   ctx.font = "700 11px Segoe UI, Arial";
   ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 9, y + 13);
 }
@@ -1248,7 +1279,7 @@ function drawZoneName(ctx, analysis, zone, x, y) {
   const width = ctx.measureText(label).width + 12;
   const px = x(center.east) - width / 2;
   const py = y(center.north) - 10;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
+  ctx.fillStyle = "rgba(11, 17, 21, 0.88)";
   ctx.fillRect(px, py, width, 20);
   ctx.fillStyle = zone.color;
   ctx.fillText(label, px + 6, py + 14);
@@ -1263,8 +1294,8 @@ function drawLegend(ctx, zones, survey, width, margin) {
   const left = width - margin.right - boxWidth;
   const top = margin.top + 4;
   ctx.save();
-  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-  ctx.strokeStyle = "rgba(97, 113, 122, 0.35)";
+  ctx.fillStyle = "rgba(18, 25, 30, 0.94)";
+  ctx.strokeStyle = "rgba(143, 164, 174, 0.5)";
   ctx.lineWidth = 1;
   ctx.fillRect(left, top, boxWidth, boxHeight);
   ctx.strokeRect(left, top, boxWidth, boxHeight);
@@ -1275,8 +1306,8 @@ function drawLegend(ctx, zones, survey, width, margin) {
     const y = top + 18 + index * 22;
     ctx.fillStyle = color;
     ctx.fillRect(left + 9, y - 9, 11, 11);
-    ctx.fillStyle = "#182126";
-    const label = zone.name.length > 22 ? `${zone.name.slice(0, 20)}…` : zone.name;
+    ctx.fillStyle = "#e5eef1";
+    const label = zone.name.length > 22 ? `${zone.name.slice(0, 20)}...` : zone.name;
     ctx.fillText(label, left + 27, y);
   });
   ctx.restore();
@@ -1768,6 +1799,52 @@ els.axisDecimals.addEventListener("change", () => {
   update(false);
 });
 els.activeZone.addEventListener("change", () => setActiveZone(els.activeZone.value));
+els.activeZoneName.addEventListener("focus", rememberInputState);
+els.activeZoneName.addEventListener("input", () => {
+  const zone = state.zones.find((item) => item.id === state.activeZoneId);
+  if (!zone) return;
+  zone.name = els.activeZoneName.value;
+  update(false);
+});
+els.activeZoneName.addEventListener("blur", () => {
+  const zone = state.zones.find((item) => item.id === state.activeZoneId);
+  if (!zone) return;
+  let name = els.activeZoneName.value.trim() || "Zona sin nombre";
+  const duplicate = state.zones.some(
+    (item) => item.id !== zone.id && item.name.toLocaleLowerCase("es") === name.toLocaleLowerCase("es")
+  );
+  if (duplicate) {
+    name = uniqueZoneName(name);
+    showToast(`El nombre ya existía. La zona se guardó como "${name}".`);
+  }
+  zone.name = name;
+  els.activeZoneName.value = name;
+  update(true);
+});
+els.activeZoneColor.addEventListener("focus", rememberInputState);
+els.activeZoneColor.addEventListener("input", () => {
+  const zone = state.zones.find((item) => item.id === state.activeZoneId);
+  if (!zone) return;
+  zone.color = els.activeZoneColor.value;
+  update(false);
+});
+els.activeZoneType.addEventListener("change", () => {
+  const zone = state.zones.find((item) => item.id === state.activeZoneId);
+  if (!zone) return;
+  pushHistory();
+  const previousType = zone.type;
+  zone.type = els.activeZoneType.value;
+  if (zone.type !== "polygon") zone.closed = false;
+  if (zone.type === "polygon" && previousType !== "polygon") zone.closed = true;
+  update(true);
+});
+els.activeZoneClosed.addEventListener("change", () => {
+  const zone = state.zones.find((item) => item.id === state.activeZoneId);
+  if (!zone || zone.type !== "polygon") return;
+  pushHistory();
+  zone.closed = els.activeZoneClosed.checked;
+  update(false);
+});
 els.addRow.addEventListener("click", () => {
   if (!state.zones.some((zone) => zone.id === state.activeZoneId)) {
     showToast("Seleccione o cree una zona antes de agregar un punto.", true);
@@ -1789,6 +1866,11 @@ els.zoneForm.addEventListener("submit", (event) => {
 });
 els.fit.addEventListener("click", () => {
   state.view = { zoom: 1, panEast: 0, panNorth: 0 };
+  update(false);
+});
+els.center.addEventListener("click", () => {
+  state.view.panEast = 0;
+  state.view.panNorth = 0;
   update(false);
 });
 els.zoomIn.addEventListener("click", () => setZoom(1.25));
@@ -1819,7 +1901,7 @@ els.newProject.addEventListener("click", () => {
   saveNamedProject();
 });
 els.saveProject.addEventListener("click", saveNamedProject);
-els.projectList.addEventListener("change", () => loadProjectByName(els.projectList.value));
+els.openProject.addEventListener("click", () => loadProjectByName(els.projectList.value));
 els.deleteProject.addEventListener("click", () => {
   const name = els.projectList.value;
   const projects = loadProjects();
@@ -1837,6 +1919,15 @@ els.deleteProject.addEventListener("click", () => {
 });
 els.undo.addEventListener("click", undo);
 els.redo.addEventListener("click", redo);
+els.toolbarToggle.addEventListener("click", () => {
+  const open = els.toolbarControls.classList.toggle("is-open");
+  els.toolbarToggle.setAttribute("aria-expanded", String(open));
+});
+els.configToggle.addEventListener("click", () => {
+  const collapsed = els.configContent.classList.toggle("is-collapsed");
+  els.configToggle.setAttribute("aria-expanded", String(!collapsed));
+  els.configToggle.textContent = collapsed ? "Mostrar" : "Ocultar";
+});
 
 els.canvas.addEventListener("wheel", (event) => {
   event.preventDefault();

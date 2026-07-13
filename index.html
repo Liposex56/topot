@@ -3,149 +3,211 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Levantamientos Topográficos V 1.1</title>
+    <title>Levantamientos Topográficos V 1.2</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="app-header">
       <div class="brand-block">
-        <p class="eyebrow">Versión 1.1</p>
-        <h1>Levantamientos Topográficos</h1>
+        <span class="brand-mark" aria-hidden="true">LT</span>
+        <div>
+          <p class="eyebrow">Versión 1.2</p>
+          <h1>Levantamientos Topográficos</h1>
+        </div>
       </div>
-      <div class="header-actions" aria-label="Acciones del proyecto">
-        <button id="newProjectBtn" type="button">Nuevo</button>
-        <button id="saveProjectBtn" class="primary-button" type="button">Guardar</button>
-        <button id="undoBtn" type="button" title="Deshacer el último cambio">Deshacer</button>
-        <button id="redoBtn" type="button" title="Rehacer el cambio">Rehacer</button>
-        <button id="exportBtn" type="button">Exportar CSV</button>
-        <label class="button-like file-button">
-          Importar CSV
-          <input id="importFile" type="file" accept=".csv,text/csv" />
-        </label>
-        <button id="exportProcessBtn" type="button">Exportar cálculos</button>
-        <button id="exportTxtBtn" type="button">Coordenadas TXT</button>
-        <button id="exportImageBtn" type="button">Guardar imagen</button>
-        <button id="printReportBtn" type="button">Imprimir / PDF</button>
+
+      <button id="toolbarToggleBtn" class="mobile-toggle" type="button" aria-expanded="false" aria-controls="toolbarControls">
+        <span aria-hidden="true">☰</span>
+        Herramientas
+      </button>
+
+      <div id="toolbarControls" class="toolbar-controls" aria-label="Barra de herramientas">
+        <div class="tool-group project-identity">
+          <label class="tool-field project-name-field" title="Nombre con el que se guardará el levantamiento">
+            <span>Levantamiento</span>
+            <input id="projectName" type="text" autocomplete="off" />
+          </label>
+          <label class="tool-field saved-project-field" title="Seleccione un levantamiento guardado">
+            <span>Guardados</span>
+            <select id="projectList" aria-label="Levantamientos guardados"></select>
+          </label>
+        </div>
+
+        <div class="tool-group" aria-label="Proyecto">
+          <button id="newProjectBtn" type="button" title="Crear un levantamiento nuevo"><span class="tool-icon" aria-hidden="true">＋</span>Nuevo</button>
+          <button id="saveProjectBtn" class="primary-button" type="button" title="Guardar el levantamiento actual"><span class="tool-icon" aria-hidden="true">▣</span>Guardar</button>
+          <button id="openProjectBtn" type="button" title="Abrir el levantamiento seleccionado"><span class="tool-icon" aria-hidden="true">□</span>Abrir</button>
+          <button id="deleteProjectBtn" class="danger-outline" type="button" title="Eliminar el levantamiento seleccionado"><span class="tool-icon" aria-hidden="true">×</span>Eliminar</button>
+        </div>
+
+        <div class="tool-group" aria-label="Historial">
+          <button id="undoBtn" class="icon-command" type="button" title="Deshacer el último cambio" aria-label="Deshacer"><span aria-hidden="true">↶</span></button>
+          <button id="redoBtn" class="icon-command" type="button" title="Rehacer el cambio" aria-label="Rehacer"><span aria-hidden="true">↷</span></button>
+        </div>
+
+        <div class="tool-group" aria-label="Archivos">
+          <label class="button-like file-button" title="Importar observaciones desde un archivo CSV">
+            <span class="tool-icon" aria-hidden="true">↑</span>Importar CSV
+            <input id="importFile" type="file" accept=".csv,text/csv" />
+          </label>
+          <button id="exportBtn" type="button" title="Exportar zonas y observaciones en formato CSV"><span class="tool-icon" aria-hidden="true">↓</span>Exportar CSV</button>
+        </div>
+
+        <div class="tool-group" aria-label="Salidas">
+          <button id="exportProcessBtn" type="button" title="Exportar el proceso completo de cálculo"><span class="tool-icon" aria-hidden="true">ƒ</span>Cálculos</button>
+          <button id="exportTxtBtn" type="button" title="Exportar la tabla de coordenadas en formato TXT"><span class="tool-icon" aria-hidden="true">≡</span>Coordenadas TXT</button>
+          <button id="exportImageBtn" type="button" title="Exportar la gráfica como imagen PNG"><span class="tool-icon" aria-hidden="true">▧</span>Exportar gráfica</button>
+          <button id="printReportBtn" type="button" title="Imprimir el informe o guardarlo como PDF"><span class="tool-icon" aria-hidden="true">▤</span>Imprimir / PDF</button>
+        </div>
       </div>
     </header>
 
     <main class="workspace">
-      <section class="panel project-panel" aria-label="Levantamientos guardados">
-        <label>
-          <span>Nombre del levantamiento</span>
-          <input id="projectName" type="text" autocomplete="off" />
-        </label>
-        <div class="project-actions">
-          <label class="saved-projects-label">
-            <span>Levantamientos guardados</span>
-            <select id="projectList" aria-label="Levantamientos guardados"></select>
-          </label>
-          <button id="deleteProjectBtn" class="danger-outline" type="button">Eliminar levantamiento</button>
-        </div>
-      </section>
-
-      <section class="panel setup-panel" aria-labelledby="setupTitle">
-        <div class="panel-heading">
+      <aside class="panel config-panel" aria-labelledby="configTitle">
+        <div class="panel-heading config-heading">
           <div>
-            <p class="section-kicker">Estación</p>
-            <h2 id="setupTitle">Coordenadas iniciales</h2>
+            <p class="section-kicker">Parámetros</p>
+            <h2 id="configTitle">Configuración del levantamiento</h2>
           </div>
-          <span class="autosave" id="saveState" role="status">Guardado local</span>
+          <button id="configToggleBtn" class="section-toggle" type="button" aria-expanded="true" aria-controls="configContent">Ocultar</button>
         </div>
 
-        <div class="field-grid two">
-          <label>
-            <span>Este inicial E0</span>
-            <input id="stationEast" type="number" step="0.001" inputmode="decimal" />
-          </label>
-          <label>
-            <span>Norte inicial N0</span>
-            <input id="stationNorth" type="number" step="0.001" inputmode="decimal" />
-          </label>
-        </div>
+        <div id="configContent" class="config-content">
+          <section class="config-section" aria-labelledby="stationTitle">
+            <div class="subsection-heading">
+              <h3 id="stationTitle">Estación inicial</h3>
+              <span class="autosave" id="saveState" role="status">Guardado local</span>
+            </div>
+            <div class="field-grid two">
+              <label>
+                <span>Este inicial E0</span>
+                <input id="stationEast" type="number" step="0.001" inputmode="decimal" />
+              </label>
+              <label>
+                <span>Norte inicial N0</span>
+                <input id="stationNorth" type="number" step="0.001" inputmode="decimal" />
+              </label>
+            </div>
 
-        <div class="mode-row" role="radiogroup" aria-label="Método de cálculo">
-          <label class="segmented">
-            <input type="radio" name="mode" value="radiacion" checked />
-            <span>Radiación</span>
-          </label>
-          <label class="segmented">
-            <input type="radio" name="mode" value="poligonal" />
-            <span>Poligonal</span>
-          </label>
-        </div>
+            <div class="mode-row" role="radiogroup" aria-label="Método de cálculo">
+              <label class="segmented">
+                <input type="radio" name="mode" value="radiacion" checked />
+                <span>Radiación</span>
+              </label>
+              <label class="segmented">
+                <input type="radio" name="mode" value="poligonal" />
+                <span>Poligonal</span>
+              </label>
+            </div>
 
-        <div class="toggle-list">
-          <label>
-            <input id="showLines" type="checkbox" checked />
-            <span>Unir puntos de cada zona</span>
-          </label>
-          <label>
-            <input id="showGrid" type="checkbox" checked />
-            <span>Mostrar cuadrícula</span>
-          </label>
-          <label>
-            <input id="showZoneNames" type="checkbox" checked />
-            <span>Mostrar nombres de zonas</span>
-          </label>
+            <div class="toggle-grid">
+              <label class="switch-row">
+                <input id="showLines" type="checkbox" checked />
+                <span>Unir puntos</span>
+              </label>
+              <label class="switch-row">
+                <input id="activeZoneClosed" type="checkbox" checked />
+                <span>Cerrar figura</span>
+              </label>
+              <label class="switch-row">
+                <input id="showGrid" type="checkbox" checked />
+                <span>Mostrar cuadrícula</span>
+              </label>
+              <label class="switch-row">
+                <input id="showZoneNames" type="checkbox" checked />
+                <span>Nombres de zonas</span>
+              </label>
+            </div>
+
+            <div class="field-grid two compact-controls">
+              <label>
+                <span>Precisión decimal</span>
+                <select id="axisDecimals">
+                  <option value="0">0 decimales</option>
+                  <option value="1">1 decimal</option>
+                  <option value="2">2 decimales</option>
+                  <option value="3">3 decimales</option>
+                </select>
+              </label>
+              <div class="config-button-grid">
+                <button id="fitBtn" type="button" title="Ajustar todos los puntos dentro de la gráfica">Ajustar</button>
+                <button id="sampleBtn" type="button" title="Cargar datos de ejemplo">Ejemplo</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="config-section zones-config" aria-labelledby="zonesTitle">
+            <div class="subsection-heading">
+              <div>
+                <p class="section-kicker">Objetos</p>
+                <h3 id="zonesTitle">Zonas del levantamiento</h3>
+              </div>
+              <button id="addZoneBtn" class="primary-button compact-button" type="button" title="Crear una nueva zona u objeto">＋ Agregar zona</button>
+            </div>
+
+            <label>
+              <span>Zona activa</span>
+              <select id="activeZoneSelect" aria-label="Zona activa"></select>
+            </label>
+
+            <div class="quick-zone-editor" aria-label="Edición rápida de la zona activa">
+              <label class="zone-name-control">
+                <span>Nombre de la zona</span>
+                <input id="activeZoneName" type="text" autocomplete="off" />
+              </label>
+              <label class="zone-color-control">
+                <span>Color</span>
+                <input id="activeZoneColor" type="color" />
+              </label>
+              <label class="zone-type-control">
+                <span>Tipo</span>
+                <select id="activeZoneType">
+                  <option value="polygon">Polígono</option>
+                  <option value="line">Línea</option>
+                  <option value="points">Puntos independientes</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="zonesList" class="zones-list"></div>
+          </section>
+        </div>
+      </aside>
+
+      <section class="panel graph-panel" aria-labelledby="graphTitle">
+        <div class="panel-heading graph-heading">
+          <div>
+            <p class="section-kicker">Plano cartesiano</p>
+            <h2 id="graphTitle">Gráfica principal Este / Norte</h2>
+          </div>
+          <div class="graph-tools" aria-label="Herramientas de la gráfica">
+            <button id="zoomOutBtn" class="icon-command" type="button" title="Alejar la gráfica" aria-label="Alejar"><span aria-hidden="true">−</span></button>
+            <button id="zoomInBtn" class="icon-command" type="button" title="Acercar la gráfica" aria-label="Acercar"><span aria-hidden="true">＋</span></button>
+            <button id="centerBtn" type="button" title="Centrar la gráfica sin cambiar el nivel de zoom"><span class="tool-icon" aria-hidden="true">⌖</span>Centrar</button>
+          </div>
+        </div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="plotCanvas" width="1000" height="1000" aria-label="Gráfica de coordenadas Este y Norte"></canvas>
         </div>
       </section>
 
       <section class="panel stats-panel" aria-label="Resultados del levantamiento">
         <div class="metric">
-          <span>Puntos válidos</span>
-          <strong id="pointsCount">0</strong>
+          <span class="metric-icon" aria-hidden="true">●</span>
+          <span class="metric-copy"><small>Puntos válidos</small><strong id="pointsCount">0</strong></span>
         </div>
         <div class="metric">
-          <span>Área de zona activa</span>
-          <strong id="areaValue">0.000 m²</strong>
+          <span class="metric-icon" aria-hidden="true">▱</span>
+          <span class="metric-copy"><small>Área de zona activa</small><strong id="areaValue">0.000 m²</strong></span>
         </div>
         <div class="metric">
-          <span id="measureLabel">Perímetro / longitud</span>
-          <strong id="perimeterValue">0.000 m</strong>
+          <span class="metric-icon" aria-hidden="true">⌁</span>
+          <span class="metric-copy"><small id="measureLabel">Perímetro de zona activa</small><strong id="perimeterValue">0.000 m</strong></span>
         </div>
         <div class="metric">
-          <span>Última coordenada</span>
-          <strong id="lastPoint">E 0 / N 0</strong>
-        </div>
-      </section>
-
-      <section class="panel zones-panel" aria-labelledby="zonesTitle">
-        <div class="panel-heading">
-          <div>
-            <p class="section-kicker">Organización</p>
-            <h2 id="zonesTitle">Zonas u objetos del levantamiento</h2>
-          </div>
-          <button id="addZoneBtn" class="primary-button" type="button">Agregar zona</button>
-        </div>
-        <div id="zonesList" class="zones-list"></div>
-      </section>
-
-      <section class="panel graph-panel" aria-labelledby="graphTitle">
-        <div class="panel-heading">
-          <div>
-            <p class="section-kicker">Plano cartesiano</p>
-            <h2 id="graphTitle">Este / Norte</h2>
-          </div>
-          <div class="graph-tools">
-            <label class="precision-control">
-              <span>Precisión</span>
-              <select id="axisDecimals">
-                <option value="0">0</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-              </select>
-            </label>
-            <button id="zoomOutBtn" type="button" title="Alejar la gráfica">Alejar</button>
-            <button id="zoomInBtn" type="button" title="Acercar la gráfica">Acercar</button>
-            <button id="fitBtn" type="button">Ajustar</button>
-            <button id="sampleBtn" type="button">Cargar ejemplo</button>
-          </div>
-        </div>
-        <div class="canvas-wrap" id="canvasWrap">
-          <canvas id="plotCanvas" width="900" height="900" aria-label="Gráfica de coordenadas Este y Norte"></canvas>
+          <span class="metric-icon" aria-hidden="true">⌖</span>
+          <span class="metric-copy"><small>Última coordenada</small><strong id="lastPoint">E 0 / N 0</strong></span>
         </div>
       </section>
 
@@ -153,15 +215,9 @@
         <div class="panel-heading table-heading">
           <div>
             <p class="section-kicker">Trabajo de campo</p>
-            <h2 id="obsTitle">Observaciones</h2>
+            <h2 id="obsTitle">Tabla de observaciones</h2>
           </div>
-          <div class="table-actions">
-            <label class="active-zone-control">
-              <span>Zona activa</span>
-              <select id="activeZoneSelect" aria-label="Zona activa"></select>
-            </label>
-            <button id="addRowBtn" class="primary-button" type="button">Agregar punto</button>
-          </div>
+          <button id="addRowBtn" class="primary-button" type="button"><span class="tool-icon" aria-hidden="true">＋</span>Agregar punto</button>
         </div>
 
         <div class="table-wrap">
@@ -181,7 +237,7 @@
                 <th>Proyección Norte</th>
                 <th>Coordenada Este</th>
                 <th>Coordenada Norte</th>
-                <th>Estado del punto</th>
+                <th>Estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>

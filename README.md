@@ -1,4 +1,4 @@
-# Levantamientos Topográficos V 1.1
+# Levantamientos Topográficos V 1.2
 
 Aplicación web para registrar observaciones topográficas en GMS, calcular coordenadas Este/Norte y organizar diferentes objetos dentro de un mismo levantamiento.
 
@@ -28,3 +28,7 @@ Después abra `http://127.0.0.1:5175` en el navegador.
 - Exportación de coordenadas TXT en tabla y cálculos separados por zona.
 - Exportación de la gráfica como imagen e informe para impresión o PDF.
 - Gráfica cuadrada con leyenda, zoom y desplazamiento.
+- Interfaz técnica oscura con barra de herramientas agrupada.
+- Panel lateral de configuración y edición rápida de la zona activa.
+- Resultados compactos debajo de la gráfica.
+- Menús plegables y distribución en dos columnas para celulares.
