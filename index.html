@@ -3,36 +3,30 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Levantamientos Topograficos V 1.0</title>
+    <title>Levantamientos Topográficos V 1.1</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="app-header">
-      <div>
-        <p class="eyebrow">Version 1.0</p>
-        <h1>Levantamientos Topograficos</h1>
+      <div class="brand-block">
+        <p class="eyebrow">Versión 1.1</p>
+        <h1>Levantamientos Topográficos</h1>
       </div>
       <div class="header-actions" aria-label="Acciones del proyecto">
-        <button class="icon-button" id="newProjectBtn" type="button" title="Nuevo proyecto" aria-label="Nuevo proyecto">
-          <span aria-hidden="true">+</span>
-        </button>
-        <button class="icon-button is-hidden-control" id="saveProjectBtn" type="button" title="Guardar proyecto" aria-label="Guardar proyecto">
-          <span aria-hidden="true">G</span>
-        </button>
-        <button class="icon-button is-hidden-control" id="exportBtn" type="button" title="Exportar CSV" aria-label="Exportar CSV">
-          <span aria-hidden="true">CSV</span>
-        </button>
-        <button class="icon-button" id="exportProcessBtn" type="button" title="Exportar calculos" aria-label="Exportar calculos">
-          <span aria-hidden="true">CAL</span>
-        </button>
-        <button class="icon-button" id="exportTxtBtn" type="button" title="Exportar TXT" aria-label="Exportar TXT">
-          <span aria-hidden="true">TXT</span>
-        </button>
-        <label class="icon-button file-button is-hidden-control" title="Importar CSV" aria-label="Importar CSV">
-          <span aria-hidden="true">IMP</span>
+        <button id="newProjectBtn" type="button">Nuevo</button>
+        <button id="saveProjectBtn" class="primary-button" type="button">Guardar</button>
+        <button id="undoBtn" type="button" title="Deshacer el último cambio">Deshacer</button>
+        <button id="redoBtn" type="button" title="Rehacer el cambio">Rehacer</button>
+        <button id="exportBtn" type="button">Exportar CSV</button>
+        <label class="button-like file-button">
+          Importar CSV
           <input id="importFile" type="file" accept=".csv,text/csv" />
         </label>
+        <button id="exportProcessBtn" type="button">Exportar cálculos</button>
+        <button id="exportTxtBtn" type="button">Coordenadas TXT</button>
+        <button id="exportImageBtn" type="button">Guardar imagen</button>
+        <button id="printReportBtn" type="button">Imprimir / PDF</button>
       </div>
     </header>
 
@@ -40,22 +34,24 @@
       <section class="panel project-panel" aria-label="Levantamientos guardados">
         <label>
           <span>Nombre del levantamiento</span>
-          <input id="projectName" type="text" />
+          <input id="projectName" type="text" autocomplete="off" />
         </label>
         <div class="project-actions">
-          <select id="projectList" aria-label="Levantamientos guardados"></select>
-          <button id="loadProjectBtn" class="is-hidden-control" type="button">Abrir</button>
-          <button id="deleteProjectBtn" type="button">Eliminar</button>
+          <label class="saved-projects-label">
+            <span>Levantamientos guardados</span>
+            <select id="projectList" aria-label="Levantamientos guardados"></select>
+          </label>
+          <button id="deleteProjectBtn" class="danger-outline" type="button">Eliminar levantamiento</button>
         </div>
       </section>
 
       <section class="panel setup-panel" aria-labelledby="setupTitle">
         <div class="panel-heading">
           <div>
-            <p class="section-kicker">Estacion</p>
+            <p class="section-kicker">Estación</p>
             <h2 id="setupTitle">Coordenadas iniciales</h2>
           </div>
-          <span class="autosave" id="saveState">Guardado local</span>
+          <span class="autosave" id="saveState" role="status">Guardado local</span>
         </div>
 
         <div class="field-grid two">
@@ -69,10 +65,10 @@
           </label>
         </div>
 
-        <div class="mode-row" role="radiogroup" aria-label="Metodo de calculo">
+        <div class="mode-row" role="radiogroup" aria-label="Método de cálculo">
           <label class="segmented">
             <input type="radio" name="mode" value="radiacion" checked />
-            <span>Radiacion</span>
+            <span>Radiación</span>
           </label>
           <label class="segmented">
             <input type="radio" name="mode" value="poligonal" />
@@ -83,36 +79,47 @@
         <div class="toggle-list">
           <label>
             <input id="showLines" type="checkbox" checked />
-            <span>Unir puntos</span>
-          </label>
-          <label>
-            <input id="closePolygon" type="checkbox" checked />
-            <span>Cerrar terreno</span>
+            <span>Unir puntos de cada zona</span>
           </label>
           <label>
             <input id="showGrid" type="checkbox" checked />
-            <span>Cuadricula</span>
+            <span>Mostrar cuadrícula</span>
+          </label>
+          <label>
+            <input id="showZoneNames" type="checkbox" checked />
+            <span>Mostrar nombres de zonas</span>
           </label>
         </div>
       </section>
 
       <section class="panel stats-panel" aria-label="Resultados del levantamiento">
         <div class="metric">
-          <span>Puntos</span>
+          <span>Puntos válidos</span>
           <strong id="pointsCount">0</strong>
         </div>
         <div class="metric">
-          <span>Area</span>
-          <strong id="areaValue">0.000 m2</strong>
+          <span>Área de zona activa</span>
+          <strong id="areaValue">0.000 m²</strong>
         </div>
         <div class="metric">
-          <span>Perimetro</span>
+          <span id="measureLabel">Perímetro / longitud</span>
           <strong id="perimeterValue">0.000 m</strong>
         </div>
         <div class="metric">
-          <span>Ultima coordenada</span>
-          <strong id="lastPoint">E 0.000 / N 0.000</strong>
+          <span>Última coordenada</span>
+          <strong id="lastPoint">E 0 / N 0</strong>
         </div>
+      </section>
+
+      <section class="panel zones-panel" aria-labelledby="zonesTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Organización</p>
+            <h2 id="zonesTitle">Zonas u objetos del levantamiento</h2>
+          </div>
+          <button id="addZoneBtn" class="primary-button" type="button">Agregar zona</button>
+        </div>
+        <div id="zonesList" class="zones-list"></div>
       </section>
 
       <section class="panel graph-panel" aria-labelledby="graphTitle">
@@ -123,7 +130,7 @@
           </div>
           <div class="graph-tools">
             <label class="precision-control">
-              <span>Precision</span>
+              <span>Precisión</span>
               <select id="axisDecimals">
                 <option value="0">0</option>
                 <option value="1">1</option>
@@ -131,12 +138,14 @@
                 <option value="3">3</option>
               </select>
             </label>
+            <button id="zoomOutBtn" type="button" title="Alejar la gráfica">Alejar</button>
+            <button id="zoomInBtn" type="button" title="Acercar la gráfica">Acercar</button>
             <button id="fitBtn" type="button">Ajustar</button>
-            <button id="sampleBtn" type="button">Ejemplo</button>
+            <button id="sampleBtn" type="button">Cargar ejemplo</button>
           </div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="plotCanvas" width="1200" height="760" aria-label="Grafica de coordenadas Este y Norte"></canvas>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="plotCanvas" width="900" height="900" aria-label="Gráfica de coordenadas Este y Norte"></canvas>
         </div>
       </section>
 
@@ -146,26 +155,34 @@
             <p class="section-kicker">Trabajo de campo</p>
             <h2 id="obsTitle">Observaciones</h2>
           </div>
-          <button id="addRowBtn" class="primary-button" type="button">Agregar punto</button>
+          <div class="table-actions">
+            <label class="active-zone-control">
+              <span>Zona activa</span>
+              <select id="activeZoneSelect" aria-label="Zona activa"></select>
+            </label>
+            <button id="addRowBtn" class="primary-button" type="button">Agregar punto</button>
+          </div>
         </div>
 
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>N. punto</th>
+                <th>Zona</th>
+                <th>Número del punto</th>
                 <th>Grados</th>
                 <th>Minutos</th>
                 <th>Segundos</th>
                 <th>Distancia</th>
-                <th>Descripcion</th>
+                <th>Descripción</th>
                 <th>Azimut decimal</th>
                 <th>Rumbo</th>
-                <th>Proy. Este</th>
-                <th>Proy. Norte</th>
-                <th>Este</th>
-                <th>Norte</th>
-                <th></th>
+                <th>Proyección Este</th>
+                <th>Proyección Norte</th>
+                <th>Coordenada Este</th>
+                <th>Coordenada Norte</th>
+                <th>Estado del punto</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="observationsBody"></tbody>
@@ -174,21 +191,102 @@
       </section>
     </main>
 
+    <dialog id="zoneDialog" class="zone-dialog">
+      <form id="zoneForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-kicker">Zona u objeto</p>
+            <h2 id="zoneDialogTitle">Agregar zona</h2>
+          </div>
+          <button id="cancelZoneBtn" class="close-dialog" type="button" aria-label="Cerrar">×</button>
+        </div>
+
+        <div class="dialog-grid">
+          <label>
+            <span>Nombre</span>
+            <input id="zoneName" type="text" required />
+          </label>
+          <label>
+            <span>Color</span>
+            <input id="zoneColor" type="color" value="#0b6b5d" />
+          </label>
+          <label>
+            <span>Tipo de elemento</span>
+            <select id="zoneType">
+              <option value="polygon">Polígono</option>
+              <option value="line">Línea</option>
+              <option value="points">Puntos independientes</option>
+            </select>
+          </label>
+          <label class="full-field">
+            <span>Descripción opcional</span>
+            <input id="zoneDescription" type="text" />
+          </label>
+          <label class="full-field reference-field">
+            <span>Referencia inicial para modo poligonal</span>
+            <select id="zoneReferenceType">
+              <option value="station">Estación inicial</option>
+              <option value="point">Un punto existente</option>
+              <option value="custom">Una coordenada personalizada</option>
+            </select>
+          </label>
+          <label id="referencePointField" class="full-field is-hidden">
+            <span>Punto existente</span>
+            <select id="zoneReferencePoint"></select>
+          </label>
+          <div id="customReferenceFields" class="field-grid two full-field is-hidden">
+            <label>
+              <span>Este de referencia</span>
+              <input id="zoneReferenceEast" type="number" step="0.001" inputmode="decimal" />
+            </label>
+            <label>
+              <span>Norte de referencia</span>
+              <input id="zoneReferenceNorth" type="number" step="0.001" inputmode="decimal" />
+            </label>
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button id="dismissZoneBtn" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar zona</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
     <template id="rowTemplate">
       <tr>
-        <td><input data-field="id" class="compact" type="text" /></td>
+        <td data-column="zone"><select data-field="zoneId" class="zone-cell-select" aria-label="Zona del punto"></select></td>
+        <td data-column="point">
+          <input data-field="id" class="compact point-number-input" type="text" inputmode="numeric" autocomplete="off" />
+          <small class="field-error" data-error="id"></small>
+        </td>
         <td><input data-field="degrees" class="compact" type="number" step="1" min="0" max="360" inputmode="numeric" /></td>
-        <td><input data-field="minutes" class="compact" type="number" step="1" min="0" max="59" inputmode="numeric" /></td>
-        <td><input data-field="seconds" class="compact" type="number" step="0.001" min="0" max="59.999" inputmode="decimal" /></td>
+        <td>
+          <input data-field="minutes" class="compact" type="number" step="1" min="0" max="59" inputmode="numeric" />
+          <small class="field-error" data-error="minutes"></small>
+        </td>
+        <td>
+          <input data-field="seconds" class="compact" type="number" step="0.001" min="0" max="59.999" inputmode="decimal" />
+          <small class="field-error" data-error="seconds"></small>
+        </td>
         <td><input data-field="distance" class="compact" type="number" step="0.001" min="0" inputmode="decimal" /></td>
         <td><input data-field="description" class="description-input" type="text" /></td>
-        <td data-output="azimuth">0.000</td>
-        <td data-output="bearing">N 0°00'00" E</td>
-        <td data-output="deltaEast">0.000</td>
-        <td data-output="deltaNorth">0.000</td>
-        <td data-output="east">0.000</td>
-        <td data-output="north">0.000</td>
-        <td><button data-action="delete" class="delete-button" type="button" title="Eliminar punto" aria-label="Eliminar punto">x</button></td>
+        <td data-output="azimuth">-</td>
+        <td data-output="bearing">-</td>
+        <td data-output="deltaEast">-</td>
+        <td data-output="deltaNorth">-</td>
+        <td data-output="east">-</td>
+        <td data-output="north">-</td>
+        <td><span class="point-status" data-output="status">Incompleto</span></td>
+        <td>
+          <div class="row-actions">
+            <button data-action="up" type="button" title="Subir punto" aria-label="Subir punto">↑</button>
+            <button data-action="down" type="button" title="Bajar punto" aria-label="Bajar punto">↓</button>
+            <button data-action="delete" class="delete-button" type="button" title="Limpiar valores del punto" aria-label="Limpiar valores del punto">×</button>
+          </div>
+        </td>
       </tr>
     </template>
 

@@ -1,22 +1,30 @@
-# Levantamientos Topograficos V 1.0
+# Levantamientos Topográficos V 1.1
 
-Sitio web basado en `V 1.0.docx` para registrar observaciones topograficas en GMS, calcular coordenadas Este/Norte y visualizar la forma del terreno en tiempo real.
+Aplicación web para registrar observaciones topográficas en GMS, calcular coordenadas Este/Norte y organizar diferentes objetos dentro de un mismo levantamiento.
 
 ## Uso
 
-Abra `index.html` en el navegador o ejecute un servidor local desde esta carpeta.
+Abra `index.html` directamente o inicie un servidor local desde esta carpeta:
 
 ```powershell
-python -m http.server 5173
+python -m http.server 5175
 ```
 
-Funciones incluidas:
+Después abra `http://127.0.0.1:5175` en el navegador.
 
-- Coordenadas iniciales E0/N0.
-- Observaciones con numero de punto, grados, minutos, segundos y distancia.
-- Conversion GMS a grados decimales.
-- Calculo de coordenadas Este/Norte por radiacion o poligonal.
-- Grafica en canvas con etiquetas, lineas, cierre y cuadricula.
-- Area y perimetro del terreno.
-- Guardado automatico en el navegador.
-- Importacion y exportacion CSV.
+## Funciones principales
+
+- Coordenadas iniciales E0/N0 y punto BM fijo en esa posición.
+- Cálculo por radiación o poligonal.
+- Conversión de GMS a azimut decimal, rumbo y proyecciones.
+- Zonas independientes de tipo polígono, línea o puntos.
+- Color, descripción, visibilidad, referencia y cierre por zona.
+- Validación de numeración, coordenadas duplicadas, filas incompletas y figuras cruzadas.
+- Área y perímetro por polígono; longitud por línea.
+- Reordenamiento y renumeración de puntos.
+- Deshacer y rehacer cambios, incluido el borrado de valores.
+- Guardado local compatible con proyectos de la versión anterior.
+- Importación y exportación CSV con información de zonas.
+- Exportación de coordenadas TXT en tabla y cálculos separados por zona.
+- Exportación de la gráfica como imagen e informe para impresión o PDF.
+- Gráfica cuadrada con leyenda, zoom y desplazamiento.
