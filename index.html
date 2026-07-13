@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Levantamientos Topograficos V 1.0</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Version 1.0</p>
+        <h1>Levantamientos Topograficos</h1>
+      </div>
+      <div class="header-actions" aria-label="Acciones del proyecto">
+        <button class="icon-button" id="newProjectBtn" type="button" title="Nuevo proyecto" aria-label="Nuevo proyecto">
+          <span aria-hidden="true">+</span>
+        </button>
+        <button class="icon-button is-hidden-control" id="saveProjectBtn" type="button" title="Guardar proyecto" aria-label="Guardar proyecto">
+          <span aria-hidden="true">G</span>
+        </button>
+        <button class="icon-button is-hidden-control" id="exportBtn" type="button" title="Exportar CSV" aria-label="Exportar CSV">
+          <span aria-hidden="true">CSV</span>
+        </button>
+        <button class="icon-button" id="exportProcessBtn" type="button" title="Exportar calculos" aria-label="Exportar calculos">
+          <span aria-hidden="true">CAL</span>
+        </button>
+        <button class="icon-button" id="exportTxtBtn" type="button" title="Exportar TXT" aria-label="Exportar TXT">
+          <span aria-hidden="true">TXT</span>
+        </button>
+        <label class="icon-button file-button is-hidden-control" title="Importar CSV" aria-label="Importar CSV">
+          <span aria-hidden="true">IMP</span>
+          <input id="importFile" type="file" accept=".csv,text/csv" />
+        </label>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel project-panel" aria-label="Levantamientos guardados">
+        <label>
+          <span>Nombre del levantamiento</span>
+          <input id="projectName" type="text" />
+        </label>
+        <div class="project-actions">
+          <select id="projectList" aria-label="Levantamientos guardados"></select>
+          <button id="loadProjectBtn" class="is-hidden-control" type="button">Abrir</button>
+          <button id="deleteProjectBtn" type="button">Eliminar</button>
+        </div>
+      </section>
+
+      <section class="panel setup-panel" aria-labelledby="setupTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Estacion</p>
+            <h2 id="setupTitle">Coordenadas iniciales</h2>
+          </div>
+          <span class="autosave" id="saveState">Guardado local</span>
+        </div>
+
+        <div class="field-grid two">
+          <label>
+            <span>Este inicial E0</span>
+            <input id="stationEast" type="number" step="0.001" inputmode="decimal" />
+          </label>
+          <label>
+            <span>Norte inicial N0</span>
+            <input id="stationNorth" type="number" step="0.001" inputmode="decimal" />
+          </label>
+        </div>
+
+        <div class="mode-row" role="radiogroup" aria-label="Metodo de calculo">
+          <label class="segmented">
+            <input type="radio" name="mode" value="radiacion" checked />
+            <span>Radiacion</span>
+          </label>
+          <label class="segmented">
+            <input type="radio" name="mode" value="poligonal" />
+            <span>Poligonal</span>
+          </label>
+        </div>
+
+        <div class="toggle-list">
+          <label>
+            <input id="showLines" type="checkbox" checked />
+            <span>Unir puntos</span>
+          </label>
+          <label>
+            <input id="closePolygon" type="checkbox" checked />
+            <span>Cerrar terreno</span>
+          </label>
+          <label>
+            <input id="showGrid" type="checkbox" checked />
+            <span>Cuadricula</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel stats-panel" aria-label="Resultados del levantamiento">
+        <div class="metric">
+          <span>Puntos</span>
+          <strong id="pointsCount">0</strong>
+        </div>
+        <div class="metric">
+          <span>Area</span>
+          <strong id="areaValue">0.000 m2</strong>
+        </div>
+        <div class="metric">
+          <span>Perimetro</span>
+          <strong id="perimeterValue">0.000 m</strong>
+        </div>
+        <div class="metric">
+          <span>Ultima coordenada</span>
+          <strong id="lastPoint">E 0.000 / N 0.000</strong>
+        </div>
+      </section>
+
+      <section class="panel graph-panel" aria-labelledby="graphTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Plano cartesiano</p>
+            <h2 id="graphTitle">Este / Norte</h2>
+          </div>
+          <div class="graph-tools">
+            <label class="precision-control">
+              <span>Precision</span>
+              <select id="axisDecimals">
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </label>
+            <button id="fitBtn" type="button">Ajustar</button>
+            <button id="sampleBtn" type="button">Ejemplo</button>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="plotCanvas" width="1200" height="760" aria-label="Grafica de coordenadas Este y Norte"></canvas>
+        </div>
+      </section>
+
+      <section class="panel table-panel" aria-labelledby="obsTitle">
+        <div class="panel-heading table-heading">
+          <div>
+            <p class="section-kicker">Trabajo de campo</p>
+            <h2 id="obsTitle">Observaciones</h2>
+          </div>
+          <button id="addRowBtn" class="primary-button" type="button">Agregar punto</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>N. punto</th>
+                <th>Grados</th>
+                <th>Minutos</th>
+                <th>Segundos</th>
+                <th>Distancia</th>
+                <th>Descripcion</th>
+                <th>Azimut decimal</th>
+                <th>Rumbo</th>
+                <th>Proy. Este</th>
+                <th>Proy. Norte</th>
+                <th>Este</th>
+                <th>Norte</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="observationsBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <template id="rowTemplate">
+      <tr>
+        <td><input data-field="id" class="compact" type="text" /></td>
+        <td><input data-field="degrees" class="compact" type="number" step="1" min="0" max="360" inputmode="numeric" /></td>
+        <td><input data-field="minutes" class="compact" type="number" step="1" min="0" max="59" inputmode="numeric" /></td>
+        <td><input data-field="seconds" class="compact" type="number" step="0.001" min="0" max="59.999" inputmode="decimal" /></td>
+        <td><input data-field="distance" class="compact" type="number" step="0.001" min="0" inputmode="decimal" /></td>
+        <td><input data-field="description" class="description-input" type="text" /></td>
+        <td data-output="azimuth">0.000</td>
+        <td data-output="bearing">N 0°00'00" E</td>
+        <td data-output="deltaEast">0.000</td>
+        <td data-output="deltaNorth">0.000</td>
+        <td data-output="east">0.000</td>
+        <td data-output="north">0.000</td>
+        <td><button data-action="delete" class="delete-button" type="button" title="Eliminar punto" aria-label="Eliminar punto">x</button></td>
+      </tr>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
