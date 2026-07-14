@@ -7,7 +7,6 @@ const ZONE_COLORS = ["#0b6b5d", "#2962a3", "#d36b22", "#6d7378", "#8a4f9e", "#b1
 const els = {
   stationEast: document.querySelector("#stationEast"),
   stationNorth: document.querySelector("#stationNorth"),
-  modeInputs: [...document.querySelectorAll('input[name="mode"]')],
   showLines: document.querySelector("#showLines"),
   showGrid: document.querySelector("#showGrid"),
   showZoneNames: document.querySelector("#showZoneNames"),
@@ -48,7 +47,6 @@ const els = {
   activeZoneName: document.querySelector("#activeZoneName"),
   activeZoneColor: document.querySelector("#activeZoneColor"),
   activeZoneType: document.querySelector("#activeZoneType"),
-  activeZoneClosed: document.querySelector("#activeZoneClosed"),
   sidebar: document.querySelector("#appSidebar"),
   sidebarBackdrop: document.querySelector("#sidebarBackdrop"),
   sidebarToggle: document.querySelector("#sidebarToggleBtn"),
@@ -62,7 +60,8 @@ const els = {
   quickMovePoint: document.querySelector("#quickMovePointBtn"),
   quickClearPoint: document.querySelector("#quickClearPointBtn"),
   quickMeasure: document.querySelector("#quickMeasureBtn"),
-  quickCloseZone: document.querySelector("#quickCloseZoneBtn"),
+  quickPoints: document.querySelector("#quickPointsBtn"),
+  quickLines: document.querySelector("#quickLinesBtn"),
   quickGrid: document.querySelector("#quickGridBtn"),
   selectedPointStatus: document.querySelector("#selectedPointStatus"),
   pointSearch: document.querySelector("#pointSearch"),
@@ -94,6 +93,13 @@ const els = {
   pointAddAnotherField: document.querySelector("#pointAddAnotherField"),
   cancelPoint: document.querySelector("#cancelPointBtn"),
   dismissPoint: document.querySelector("#dismissPointBtn"),
+  newProjectDialog: document.querySelector("#newProjectDialog"),
+  newProjectForm: document.querySelector("#newProjectForm"),
+  newProjectName: document.querySelector("#newProjectName"),
+  newProjectEast: document.querySelector("#newProjectEast"),
+  newProjectNorth: document.querySelector("#newProjectNorth"),
+  cancelNewProject: document.querySelector("#cancelNewProjectBtn"),
+  dismissNewProject: document.querySelector("#dismissNewProjectBtn"),
   zoneDialog: document.querySelector("#zoneDialog"),
   zoneForm: document.querySelector("#zoneForm"),
   zoneDialogTitle: document.querySelector("#zoneDialogTitle"),
@@ -176,6 +182,7 @@ function createBlankState(projectName = "Levantamiento sin nombre") {
     modifiedAt: new Date().toISOString(),
     station: { east: 1000, north: 1000 },
     mode: "radiacion",
+    showPoints: true,
     showLines: true,
     showGrid: true,
     showZoneNames: true,
@@ -232,6 +239,7 @@ function migrateState(rawState) {
       north: toNumber(raw.station?.north ?? fallback.station.north),
     },
     mode: raw.mode === "poligonal" ? "poligonal" : "radiacion",
+    showPoints: raw.showPoints !== false,
     showLines: raw.showLines !== false,
     showGrid: raw.showGrid !== false,
     showZoneNames: raw.showZoneNames !== false,
@@ -1013,18 +1021,15 @@ function syncActiveZoneControls() {
   els.activeZoneName.disabled = disabled;
   els.activeZoneColor.disabled = disabled;
   els.activeZoneType.disabled = disabled;
-  els.activeZoneClosed.disabled = disabled || zone?.type !== "polygon";
   if (!zone) {
     els.activeZoneName.value = "";
     els.activeZoneColor.value = "#31b6d5";
     els.activeZoneType.value = "polygon";
-    els.activeZoneClosed.checked = false;
     return;
   }
   if (document.activeElement !== els.activeZoneName) els.activeZoneName.value = zone.name;
   if (document.activeElement !== els.activeZoneColor) els.activeZoneColor.value = zone.color;
   els.activeZoneType.value = zone.type;
-  els.activeZoneClosed.checked = zone.type === "polygon" && zone.closed;
 }
 
 function renderZones(survey) {
@@ -1086,9 +1091,6 @@ function renderZones(survey) {
         showToast(`Se actualizó la numeración de ${zone.name}.`);
       })
     );
-    if (zone.type === "polygon") {
-      actions.append(zoneButton(zone.closed ? "Abrir figura" : "Cerrar figura", () => toggleZoneClosed(zone.id)));
-    }
     actions.append(zoneButton("Eliminar", () => deleteZone(zone.id), "danger-outline"));
     item.append(top, meta, measures, actions);
     els.zonesList.appendChild(item);
@@ -1356,27 +1358,41 @@ function niceAxis(minValue, maxValue, anchorValue) {
   return { min, max, ticks };
 }
 
-function balancedAxes(eastAxis, northAxis, plotW, plotH, station) {
-  let eastMin = eastAxis.min;
-  let eastMax = eastAxis.max;
-  let northMin = northAxis.min;
-  let northMax = northAxis.max;
-  const eastUnitsPerPixel = (eastMax - eastMin) / plotW;
-  const northUnitsPerPixel = (northMax - northMin) / plotH;
-  if (eastUnitsPerPixel > northUnitsPerPixel) {
-    const targetRange = eastUnitsPerPixel * plotH;
-    const center = (northMin + northMax) / 2;
-    northMin = center - targetRange / 2;
-    northMax = center + targetRange / 2;
-  } else {
-    const targetRange = northUnitsPerPixel * plotW;
-    const center = (eastMin + eastMax) / 2;
-    eastMin = center - targetRange / 2;
-    eastMax = center + targetRange / 2;
+function axisWithinRange(min, max, anchorValue) {
+  const span = Math.max(1e-9, max - min);
+  const requestedStep = Number(state?.gridSize || 0);
+  const step = requestedStep > 0 && span / requestedStep <= 250
+    ? requestedStep
+    : niceStep(span / 5);
+  const ticks = [];
+  const firstTick = Math.ceil((min - step / 1000) / step) * step;
+  for (let value = firstTick; value <= max + step / 1000; value += step) {
+    ticks.push(Number(value.toFixed(10)));
   }
+  if (
+    Number.isFinite(anchorValue) &&
+    anchorValue >= min &&
+    anchorValue <= max &&
+    !ticks.some((value) => Math.abs(value - anchorValue) < step / 1000)
+  ) {
+    ticks.push(anchorValue);
+    ticks.sort((a, b) => a - b);
+  }
+  return { min, max, ticks };
+}
+
+function balancedAxes(eastAxis, northAxis, plotW, plotH, station) {
+  const eastCenter = (eastAxis.min + eastAxis.max) / 2;
+  const northCenter = (northAxis.min + northAxis.max) / 2;
+  const unitsPerPixel = Math.max(
+    (eastAxis.max - eastAxis.min) / plotW,
+    (northAxis.max - northAxis.min) / plotH
+  );
+  const eastRange = unitsPerPixel * plotW;
+  const northRange = unitsPerPixel * plotH;
   return {
-    eastAxis: niceAxis(eastMin, eastMax, station.east),
-    northAxis: niceAxis(northMin, northMax, station.north),
+    eastAxis: axisWithinRange(eastCenter - eastRange / 2, eastCenter + eastRange / 2, station.east),
+    northAxis: axisWithinRange(northCenter - northRange / 2, northCenter + northRange / 2, station.north),
   };
 }
 
@@ -1387,8 +1403,8 @@ function applyView(eastAxis, northAxis, station) {
   const eastCenter = (eastAxis.min + eastAxis.max) / 2 + toNumber(state.view.panEast);
   const northCenter = (northAxis.min + northAxis.max) / 2 + toNumber(state.view.panNorth);
   return {
-    eastAxis: niceAxis(eastCenter - eastRange / 2, eastCenter + eastRange / 2, station.east),
-    northAxis: niceAxis(northCenter - northRange / 2, northCenter + northRange / 2, station.north),
+    eastAxis: axisWithinRange(eastCenter - eastRange / 2, eastCenter + eastRange / 2, station.east),
+    northAxis: axisWithinRange(northCenter - northRange / 2, northCenter + northRange / 2, station.north),
   };
 }
 
@@ -1432,15 +1448,17 @@ function drawPlot(survey) {
     const analysis = survey.analyses.get(zone.id);
     const displayColor = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
     if (state.showLines && zone.type !== "points") drawZoneGeometry(ctx, analysis, zone, displayColor, x, y);
-    analysis.points.forEach((point) => drawPoint(
-      ctx,
-      x(point.east),
-      y(point.north),
-      state.showPointNumbers ? point.id : "",
-      displayColor,
-      false,
-      point.uid === selectedPointUid
-    ));
+    if (state.showPoints) {
+      analysis.points.forEach((point) => drawPoint(
+        ctx,
+        x(point.east),
+        y(point.north),
+        state.showPointNumbers ? point.id : "",
+        displayColor,
+        false,
+        point.uid === selectedPointUid
+      ));
+    }
     if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y);
   });
 
@@ -1633,19 +1651,17 @@ function updateStats(survey) {
     : quickMode === "measure" && measurePointUids.length === 1
       ? "Seleccione el segundo punto"
       : "Sin selección";
+  els.quickPoints.classList.toggle("is-active", state.showPoints);
+  els.quickPoints.querySelector("span:last-child").textContent = state.showPoints ? "Ocultar puntos" : "Mostrar puntos";
+  els.quickLines.classList.toggle("is-active", state.showLines);
+  els.quickLines.querySelector("span:last-child").textContent = state.showLines ? "Ocultar líneas" : "Mostrar líneas";
   els.quickGrid.classList.toggle("is-active", state.showGrid);
-  const activeZone = state.zones.find((zone) => zone.id === state.activeZoneId);
-  els.quickCloseZone.disabled = activeZone?.type !== "polygon";
-  els.quickCloseZone.querySelector("span:last-child").textContent = activeZone?.closed ? "Abrir" : "Cerrar";
 }
 
 function syncControls() {
   els.projectName.value = state.projectName;
   els.stationEast.value = state.station.east;
   els.stationNorth.value = state.station.north;
-  els.modeInputs.forEach((input) => {
-    input.checked = input.value === state.mode;
-  });
   els.showLines.checked = state.showLines;
   els.showGrid.checked = state.showGrid;
   els.showZoneNames.checked = state.showZoneNames;
@@ -1832,6 +1848,8 @@ function loadProjectByName(name) {
   if (!name || !projects[name]) return;
   state = migrateState(projects[name]);
   state.projectName = name;
+  state.showPoints = true;
+  state.showLines = true;
   loadedProjectName = name;
   undoStack.length = 0;
   redoStack.length = 0;
@@ -1856,6 +1874,8 @@ function load() {
     }
   }
   state = migrateState(stored || createBlankState());
+  state.showPoints = true;
+  state.showLines = true;
   if (loadedProjectName) state.projectName = loadedProjectName;
   syncControls();
   update(true);
@@ -2269,6 +2289,42 @@ function handleCanvasTool(event) {
   update(false);
 }
 
+function openNewProjectDialog() {
+  els.newProjectName.value = "Nuevo levantamiento";
+  els.newProjectEast.value = "";
+  els.newProjectNorth.value = "";
+  els.newProjectDialog.showModal();
+  els.newProjectName.focus();
+  els.newProjectName.select();
+}
+
+function createProjectFromDialog() {
+  const name = normalizeProjectName(els.newProjectName.value);
+  const eastText = els.newProjectEast.value.trim();
+  const northText = els.newProjectNorth.value.trim();
+  const east = Number(eastText);
+  const north = Number(northText);
+  if (!eastText || !Number.isFinite(east)) {
+    showToast("Ingrese una coordenada Este inicial válida.", true);
+    return;
+  }
+  if (!northText || !Number.isFinite(north)) {
+    showToast("Ingrese una coordenada Norte inicial válida.", true);
+    return;
+  }
+  const projects = loadProjects();
+  if (projects[name] && !window.confirm(`Ya existe "${name}". ¿Desea reemplazarlo con un proyecto nuevo?`)) return;
+  state = createBlankState(name);
+  state.station = { east, north };
+  loadedProjectName = null;
+  undoStack.length = 0;
+  redoStack.length = 0;
+  els.newProjectDialog.close();
+  syncControls();
+  update(true);
+  saveNamedProject();
+}
+
 function setZoom(factor) {
   state.view.zoom = clampNumber(state.view.zoom * factor, 0.5, 20);
   update(false);
@@ -2289,11 +2345,6 @@ els.projectName.addEventListener("input", () => {
   state.projectName = els.projectName.value;
   saveLocalState();
 });
-els.modeInputs.forEach((input) => input.addEventListener("change", () => {
-  pushHistory();
-  state.mode = input.value;
-  update(true);
-}));
 els.showLines.addEventListener("change", () => {
   pushHistory();
   state.showLines = els.showLines.checked;
@@ -2379,13 +2430,6 @@ els.activeZoneType.addEventListener("change", () => {
   if (zone.type === "polygon" && previousType !== "polygon") zone.closed = state.autoClosePolygons;
   update(true);
 });
-els.activeZoneClosed.addEventListener("change", () => {
-  const zone = state.zones.find((item) => item.id === state.activeZoneId);
-  if (!zone || zone.type !== "polygon") return;
-  pushHistory();
-  zone.closed = els.activeZoneClosed.checked;
-  update(false);
-});
 els.addRow.addEventListener("click", () => {
   if (!state.zones.some((zone) => zone.id === state.activeZoneId)) {
     showToast("Seleccione o cree una zona antes de agregar un punto.", true);
@@ -2445,19 +2489,12 @@ els.importFile.addEventListener("change", () => {
   if (file) importCsv(file);
   els.importFile.value = "";
 });
-els.newProject.addEventListener("click", () => {
-  const proposed = window.prompt("Nombre del nuevo levantamiento:", "Nuevo levantamiento");
-  if (proposed === null) return;
-  const name = normalizeProjectName(proposed);
-  const projects = loadProjects();
-  if (projects[name] && !window.confirm(`Ya existe "${name}". ¿Desea reemplazarlo con un proyecto nuevo?`)) return;
-  state = createBlankState(name);
-  loadedProjectName = null;
-  undoStack.length = 0;
-  redoStack.length = 0;
-  syncControls();
-  update(true);
-  saveNamedProject();
+els.newProject.addEventListener("click", openNewProjectDialog);
+els.cancelNewProject.addEventListener("click", () => els.newProjectDialog.close());
+els.dismissNewProject.addEventListener("click", () => els.newProjectDialog.close());
+els.newProjectForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  createProjectFromDialog();
 });
 els.saveProject.addEventListener("click", saveNamedProject);
 els.openProject.addEventListener("click", () => loadProjectByName(els.projectList.value));
@@ -2500,7 +2537,17 @@ els.quickMeasure.addEventListener("click", () => {
   measurePointUids = [];
   setQuickMode("measure");
 });
-els.quickCloseZone.addEventListener("click", () => toggleZoneClosed(state.activeZoneId));
+els.quickPoints.addEventListener("click", () => {
+  pushHistory();
+  state.showPoints = !state.showPoints;
+  update(false);
+});
+els.quickLines.addEventListener("click", () => {
+  pushHistory();
+  state.showLines = !state.showLines;
+  syncControls();
+  update(false);
+});
 els.quickGrid.addEventListener("click", () => {
   pushHistory();
   state.showGrid = !state.showGrid;

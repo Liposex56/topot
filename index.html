@@ -93,7 +93,8 @@
                 <button id="quickMovePointBtn" type="button" title="Editar el punto seleccionado"><span aria-hidden="true">↔</span><span>Mover</span></button>
                 <button id="quickClearPointBtn" type="button" title="Limpiar los valores del punto seleccionado"><span aria-hidden="true">×</span><span>Limpiar</span></button>
                 <button id="quickMeasureBtn" type="button" title="Medir distancia entre dos puntos"><span aria-hidden="true">⌁</span><span>Medir</span></button>
-                <button id="quickCloseZoneBtn" type="button" title="Abrir o cerrar la zona activa"><span aria-hidden="true">◇</span><span>Cerrar</span></button>
+                <button id="quickPointsBtn" type="button" title="Mostrar u ocultar los puntos"><span aria-hidden="true">●</span><span>Ocultar puntos</span></button>
+                <button id="quickLinesBtn" type="button" title="Mostrar u ocultar las líneas"><span aria-hidden="true">⌁</span><span>Ocultar líneas</span></button>
                 <button id="quickGridBtn" type="button" title="Mostrar u ocultar la cuadrícula"><span aria-hidden="true">#</span><span>Cuadrícula</span></button>
                 <div id="selectedPointStatus" class="selection-status">Sin selección</div>
               </aside>
@@ -150,8 +151,8 @@
               </label>
               <button id="clearPointFiltersBtn" type="button">Limpiar filtros</button>
             </div>
-            <div class="table-wrap">
-              <table>
+            <div class="table-wrap calculation-table-wrap">
+              <table class="calculation-table">
                 <thead>
                   <tr>
                     <th>Zona</th><th>Número del punto</th><th>Grados</th><th>Minutos</th><th>Segundos</th><th>Distancia</th><th>Descripción</th><th>Azimut decimal</th><th>Rumbo</th><th>Proyección Este</th><th>Proyección Norte</th><th>Coordenada Este</th><th>Coordenada Norte</th><th>Estado</th><th>Acciones</th>
@@ -178,7 +179,6 @@
                   <label class="wide-field"><span>Nombre</span><input id="activeZoneName" type="text" autocomplete="off" /></label>
                   <label><span>Color</span><input id="activeZoneColor" type="color" /></label>
                   <label><span>Tipo</span><select id="activeZoneType"><option value="polygon">Polígono</option><option value="line">Línea</option><option value="points">Puntos independientes</option></select></label>
-                  <label class="checkbox-field"><input id="activeZoneClosed" type="checkbox" /><span>Cerrar figura</span></label>
                 </div>
               </section>
               <section class="zones-list-panel">
@@ -245,14 +245,10 @@
             </div>
             <div class="settings-grid">
               <section class="settings-section">
-                <h2>Estación y método</h2>
+                <h2>Coordenadas iniciales</h2>
                 <div class="form-grid two-columns">
                   <label><span>Este inicial E0</span><input id="stationEast" type="number" step="0.001" inputmode="decimal" /></label>
                   <label><span>Norte inicial N0</span><input id="stationNorth" type="number" step="0.001" inputmode="decimal" /></label>
-                </div>
-                <div class="mode-row" role="radiogroup" aria-label="Método de cálculo">
-                  <label class="segmented"><input type="radio" name="mode" value="radiacion" checked /><span>Radiación</span></label>
-                  <label class="segmented"><input type="radio" name="mode" value="poligonal" /><span>Poligonal</span></label>
                 </div>
               </section>
               <section class="settings-section">
@@ -286,6 +282,21 @@
         <button id="mobileMoreBtn" class="mobile-nav-button" type="button"><span aria-hidden="true">•••</span><small>Más</small></button>
       </nav>
     </div>
+
+    <dialog id="newProjectDialog" class="app-dialog">
+      <form id="newProjectForm">
+        <div class="dialog-heading">
+          <div><p class="section-kicker">Proyecto</p><h2>Nuevo levantamiento</h2></div>
+          <button id="cancelNewProjectBtn" class="close-dialog" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="wide-field"><span>Nombre del levantamiento</span><input id="newProjectName" type="text" required /></label>
+          <label><span>Coordenada Este inicial</span><input id="newProjectEast" type="number" step="0.001" inputmode="decimal" required /></label>
+          <label><span>Coordenada Norte inicial</span><input id="newProjectNorth" type="number" step="0.001" inputmode="decimal" required /></label>
+        </div>
+        <div class="dialog-actions"><button id="dismissNewProjectBtn" type="button">Cancelar</button><button class="primary-button" type="submit">Crear levantamiento</button></div>
+      </form>
+    </dialog>
 
     <dialog id="pointDialog" class="app-dialog point-dialog">
       <form id="pointForm">
