@@ -393,10 +393,7 @@ input[type="checkbox"] {
 }
 
 .plan-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(205px, 1fr);
-  gap: 12px;
-  align-items: start;
+  display: block;
 }
 
 .plan-main {
@@ -412,20 +409,21 @@ input[type="checkbox"] {
   min-height: 36px;
 }
 
-.plan-side-panel {
-  display: grid;
-  min-width: 0;
-  gap: 12px;
-}
-
 .plan-zoom {
   display: flex;
   gap: 6px;
 }
 
+.plan-visual-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(205px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
 .canvas-wrap {
   position: relative;
-  width: min(100%, calc(100vh - 190px), 920px);
+  width: min(100%, calc(100vh - 315px), 920px);
   aspect-ratio: 1 / 1;
   margin: 0 auto;
   overflow: hidden;
@@ -495,9 +493,10 @@ canvas {
 }
 
 .quick-tools {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+  margin-bottom: 12px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -506,8 +505,10 @@ canvas {
 
 .quick-tools button {
   display: grid;
-  min-height: 54px;
-  padding: 5px 3px;
+  min-width: 82px;
+  min-height: 48px;
+  flex: 1 1 82px;
+  padding: 5px 7px;
   place-items: center;
   font-size: 0.62rem;
   white-space: normal;
@@ -524,8 +525,10 @@ canvas {
 }
 
 .selection-status {
-  grid-column: 1 / -1;
-  padding: 6px 3px;
+  min-width: 150px;
+  flex: 2 1 170px;
+  align-self: center;
+  padding: 6px;
   color: var(--muted);
   font-size: 0.62rem;
   line-height: 1.3;
@@ -915,10 +918,6 @@ td select {
   min-width: 1450px;
 }
 
-#view-points .calculation-table {
-  min-width: 1180px;
-}
-
 .calculation-points {
   display: grid;
   gap: 8px;
@@ -1253,6 +1252,10 @@ td select {
   }
 
   .plan-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-visual-layout {
     grid-template-columns: 1fr;
   }
 

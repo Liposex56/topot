@@ -1140,7 +1140,7 @@ function renderCalculations(survey) {
     const analysis = survey.analyses.get(zone.id);
     const rows = analysis.rows.filter(({ point }) => point.hasData && (!pointFilter || point.uid === pointFilter));
     if (pointFilter && !rows.length) return "";
-    const pointHtml = rows.map(({ point, index }) => {
+    const rowHtml = rows.map(({ point, index }) => {
       const source = state.observations[index];
       const gms = `${formatPlainNumber(source.degrees, 0)}\u00b0 ${formatPlainNumber(source.minutes, 0)}' ${formatPlainNumber(source.seconds, 3)}\"`;
       const details = [];
@@ -1149,26 +1149,26 @@ function renderCalculations(survey) {
       if (point.description) details.push(point.description);
       const title = `Punto ${point.id || "-"}${details.length ? ` (${details.join(", ")})` : ""}`;
       const value = (number, suffix = "") => point.hasCoordinates ? `${formatNumber(number)}${suffix}` : "-";
-      return `<article class="calculation-point">
-        <h3>${escapeHtml(title)}</h3>
-        <div class="calculation-values">
-          <span><small>GMS</small><strong>${escapeHtml(gms)}</strong></span>
-          <span><small>Distancia</small><strong>${value(point.distance, ` ${unitSymbol()}`)}</strong></span>
-          <span><small>Azimut</small><strong>${value(point.azimuth, "\u00b0")}</strong></span>
-          <span><small>Rumbo</small><strong>${point.hasCoordinates ? escapeHtml(point.bearing) : "-"}</strong></span>
-          <span><small>Proyección Este</small><strong>${value(point.deltaEast, ` ${unitSymbol()}`)}</strong></span>
-          <span><small>Proyección Norte</small><strong>${value(point.deltaNorth, ` ${unitSymbol()}`)}</strong></span>
-          <span><small>Coordenada Este</small><strong>${value(point.east)}</strong></span>
-          <span><small>Coordenada Norte</small><strong>${value(point.north)}</strong></span>
-        </div>
-      </article>`;
+      return `<tr>
+        <td>${escapeHtml(title)}</td>
+        <td>${escapeHtml(gms)}</td>
+        <td>${value(point.distance, ` ${unitSymbol()}`)}</td>
+        <td>${value(point.azimuth, "\u00b0")}</td>
+        <td>${point.hasCoordinates ? escapeHtml(point.bearing) : "-"}</td>
+        <td>${value(point.deltaEast, ` ${unitSymbol()}`)}</td>
+        <td>${value(point.deltaNorth, ` ${unitSymbol()}`)}</td>
+        <td>${value(point.east)}</td>
+        <td>${value(point.north)}</td>
+      </tr>`;
     }).join("");
     const area = zone.type === "polygon" ? `<span>Area: ${formatNumber(analysis.area)} ${areaUnitSymbol()}</span>` : "";
     const measure = zone.type !== "points" ? `<span>${zone.type === "line" ? "Longitud" : "Perimetro"}: ${formatNumber(analysis.measure)} ${unitSymbol()}</span>` : "";
     return `<section class="calculation-zone" style="--zone-color:${escapeHtml(zone.color)}">
       <div class="calculation-zone-heading"><h2>${escapeHtml(zone.name)}</h2></div>
       <div class="calculation-summary"><span>${escapeHtml(zoneTypeLabel(zone.type))}</span><span>${analysis.count} puntos</span>${area}${measure}</div>
-      <div class="calculation-points">${pointHtml || '<p class="empty-state">No hay observaciones para mostrar.</p>'}</div>
+      <div class="calculation-table-wrap"><table class="calculation-table"><thead><tr>
+        <th>Identificación</th><th>GMS</th><th>Distancia</th><th>Azimut decimal</th><th>Rumbo</th><th>Proy. Este</th><th>Proy. Norte</th><th>Coord. Este</th><th>Coord. Norte</th>
+      </tr></thead><tbody>${rowHtml || '<tr><td colspan="9">No hay observaciones para mostrar.</td></tr>'}</tbody></table></div>
     </section>`;
   }).filter(Boolean).join("");
   els.calculationsContent.innerHTML = sections || '<p class="empty-state">No hay calculos que coincidan con los filtros.</p>';
@@ -1765,79 +1765,54 @@ function renderDrawingScale(survey) {
 }
 
 function createTechnicalPlanCanvas(survey) {
-  const details = drawingScaleDetails(survey);
-  const pixelsPerMillimeter = 3;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(details.paper.width * pixelsPerMillimeter);
-  canvas.height = Math.round(details.paper.height * pixelsPerMillimeter);
+  canvas.width = 1400;
+  canvas.height = 1000;
   const ctx = canvas.getContext("2d");
-  ctx.scale(pixelsPerMillimeter, pixelsPerMillimeter);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, details.paper.width, details.paper.height);
+  const width = canvas.width;
+  const height = canvas.height;
+  const station = { east: toNumber(state.station.east), north: toNumber(state.station.north), id: "BM" };
+  const visibleZoneIds = new Set(state.zones.filter((zone) => zone.visible).map((zone) => zone.id));
+  const visiblePoints = survey.points.filter((point) => point.hasCoordinates && visibleZoneIds.has(point.zoneId));
+  const eastValues = [station, ...visiblePoints].map((point) => point.east);
+  const northValues = [station, ...visiblePoints].map((point) => point.north);
+  let eastAxis = niceAxis(Math.min(...eastValues), Math.max(...eastValues), station.east);
+  let northAxis = niceAxis(Math.min(...northValues), Math.max(...northValues), station.north);
+  const margin = { left: 90, right: 45, top: 45, bottom: 70 };
+  const plotW = width - margin.left - margin.right;
+  const plotH = height - margin.top - margin.bottom;
+  ({ eastAxis, northAxis } = balancedAxes(eastAxis, northAxis, plotW, plotH, station));
+  const x = (east) => margin.left + ((east - eastAxis.min) / (eastAxis.max - eastAxis.min)) * plotW;
+  const y = (north) => margin.top + (1 - (north - northAxis.min) / (northAxis.max - northAxis.min)) * plotH;
+  const colors = plotColors();
+  ctx.fillStyle = colors.background;
+  ctx.fillRect(0, 0, width, height);
+  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height);
 
-  const planLeft = PAPER_MARGIN_MM;
-  const planTop = PAPER_MARGIN_MM;
-  const planWidth = details.usefulWidth;
-  const planHeight = details.usefulHeight;
-  const coordinateToMillimeters = state.units === "ft" ? 304.8 : 1000;
-  const originX = planLeft + (planWidth - details.drawingWidth) / 2;
-  const originY = planTop + (planHeight - details.drawingHeight) / 2;
-  const x = (east) => originX + ((east - details.bounds.minEast) * coordinateToMillimeters) / details.selected;
-  const y = (north) => originY + ((details.bounds.maxNorth - north) * coordinateToMillimeters) / details.selected;
-
-  ctx.strokeStyle = "#111111";
-  ctx.lineWidth = 0.35;
-  ctx.strokeRect(planLeft, planTop, planWidth, planHeight);
   state.zones.forEach((zone) => {
+    if (!zone.visible) return;
     const analysis = survey.analyses.get(zone.id);
-    ctx.save();
-    ctx.strokeStyle = zone.color;
-    ctx.fillStyle = zone.color;
-    ctx.lineWidth = 0.65;
-    if (zone.type !== "points") {
-      analysis.segments.forEach((segment) => {
-        if (segment.length < 2) return;
-        ctx.beginPath();
-        segment.forEach((point, index) => {
-          if (index === 0) ctx.moveTo(x(point.east), y(point.north));
-          else ctx.lineTo(x(point.east), y(point.north));
-        });
-        if (zone.type === "polygon" && zone.closed && analysis.complete && segment.length === analysis.points.length) ctx.closePath();
-        ctx.stroke();
-      });
+    const displayColor = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
+    if (state.showLines && zone.type !== "points") drawZoneGeometry(ctx, analysis, zone, displayColor, x, y);
+    if (state.showPoints) {
+      analysis.points.forEach((point) => drawPoint(
+        ctx,
+        x(point.east),
+        y(point.north),
+        state.showPointNumbers ? point.id : "",
+        displayColor
+      ));
     }
-    ctx.font = "3px Arial";
-    analysis.points.forEach((point) => {
-      const px = x(point.east);
-      const py = y(point.north);
-      ctx.beginPath();
-      ctx.arc(px, py, 1.15, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillText(point.id, px + 1.8, py - 1.4);
-    });
-    ctx.restore();
+    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y);
   });
-
-  const stationX = x(toNumber(state.station.east));
-  const stationY = y(toNumber(state.station.north));
-  ctx.fillStyle = "#c9302c";
-  ctx.beginPath();
-  ctx.arc(stationX, stationY, 1.4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.font = "bold 3px Arial";
-  ctx.fillText("BM", stationX + 2, stationY - 1.6);
-
-  const titleY = details.paper.height - PAPER_MARGIN_MM - TITLE_BLOCK_MM;
-  ctx.strokeStyle = "#111111";
-  ctx.lineWidth = 0.35;
-  ctx.strokeRect(PAPER_MARGIN_MM, titleY, details.paper.width - PAPER_MARGIN_MM * 2, TITLE_BLOCK_MM);
-  ctx.fillStyle = "#111111";
-  ctx.font = "bold 4px Arial";
-  ctx.fillText(state.projectName, PAPER_MARGIN_MM + 4, titleY + 9);
-  ctx.font = "3px Arial";
-  ctx.fillText(`Formato ${state.drawingScale.paper} ${state.drawingScale.orientation}`, PAPER_MARGIN_MM + 4, titleY + 18);
-  ctx.fillText(`Escala 1:${details.selected}`, PAPER_MARGIN_MM + 4, titleY + 26);
-  ctx.fillText(`E inicial ${formatNumber(toNumber(state.station.east))}  N inicial ${formatNumber(toNumber(state.station.north))}`, PAPER_MARGIN_MM + 80, titleY + 26);
+  drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH);
+  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true);
+  drawStationCoords(ctx, x(station.east), y(station.north), station);
+  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin);
+  ctx.fillStyle = colors.text;
+  ctx.font = "700 18px Segoe UI, Arial";
+  ctx.fillText("Este (E)", margin.left + plotW - 80, height - 18);
+  ctx.fillText("Norte (N)", margin.left, 26);
   return canvas;
 }
 
@@ -2168,15 +2143,19 @@ function makeTextTable(headers, rows) {
 function exportCoordinatesTxt() {
   const survey = computeSurvey();
   const points = survey.points.filter((point) => point.hasCoordinates);
-  const headers = ["Número del punto", "Coordenada Este", "Coordenada Norte", "Coordenada Z", "Descripción"];
+  const protectValue = (value) => {
+    const text = String(value ?? "");
+    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
   const rows = points.map((point) => [
     point.id,
     formatNumber(point.east),
     formatNumber(point.north),
-    "0",
-    point.description,
+    state.zones.find((zone) => zone.id === point.zoneId)?.name || "",
+    state.zones.find((zone) => zone.id === point.zoneId)?.description || "",
   ]);
-  downloadFile(makeTextTable(headers, rows), `${safeFileName(state.projectName)}-coordenadas.txt`, "text/plain;charset=utf-8");
+  const content = rows.map((row) => row.map(protectValue).join(", ")).join("\r\n");
+  downloadFile(`\ufeff${content}`, `${safeFileName(state.projectName)}-coordenadas.txt`, "text/plain;charset=utf-8");
 }
 
 function exportCalculationProcess() {
@@ -2344,7 +2323,7 @@ function exportGraphImage() {
   const technicalCanvas = createTechnicalPlanCanvas(survey);
   technicalCanvas.toBlob((blob) => {
     if (!blob) return;
-    downloadFile(blob, `${safeFileName(state.projectName)}-plano-${state.drawingScale.paper}-${state.drawingScale.orientation}.png`, "image/png");
+    downloadFile(blob, `${safeFileName(state.projectName)}-grafica.png`, "image/png");
   }, "image/png");
 }
 
@@ -2423,25 +2402,22 @@ function printReport() {
   const initialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="15"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
   const modifiedDate = new Date(state.modifiedAt);
   const dateText = Number.isNaN(modifiedDate.getTime()) ? "" : modifiedDate.toLocaleDateString("es-CO");
-  const pageOrientation = state.drawingScale.orientation === "horizontal" ? "landscape" : "portrait";
   const popup = window.open("", "_blank", "width=1100,height=800");
   if (!popup) {
     showToast("El navegador bloqueó la ventana de impresión. Permita las ventanas emergentes e inténtelo de nuevo.", true);
     return;
   }
   popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(state.projectName)}</title><style>
-    @page{size:${state.drawingScale.paper} ${pageOrientation};margin:8mm}
-    *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0;background:#fff}button{margin:0 0 8px;padding:7px 11px}.report-title{text-align:center;margin:0 0 12px}.report-title h1{font-size:15px;margin:0 0 3px}.report-title p{font-size:11px;margin:2px 0}.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:5px}.meta-table{width:100%;border-collapse:collapse;font-size:8px}.meta-table td{padding:1px 2px}.meta-table td:first-child{width:52%}.meta-table td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums}.main-table,.zone-table{width:100%;border-collapse:collapse;table-layout:fixed}.main-table{font-size:6.5px}.main-table th,.main-table td,.zone-table th,.zone-table td{border:0.5px solid #111;padding:1.5px 2px;text-align:center;vertical-align:middle;overflow-wrap:anywhere}.main-table thead th{font-weight:700;background:#fff}.main-table thead tr:first-child th{font-size:7px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:13px}.report-total{margin:6px 8% 10px 0;text-align:right;font-size:9px;font-weight:700}.zone-table{margin-top:8px;font-size:7.5px}.zone-table th{font-weight:700}.section-title{font-size:10px;margin:9px 0 4px}.plan-sheet{margin-top:10px;break-before:page}.plan-sheet img{display:block;width:100%;height:auto;border:0.5px solid #111}.scale-caption{text-align:right;font-size:9px;font-weight:700;margin:4px 0}@media print{button{display:none}.main-table,.meta-grid,.zone-table{break-inside:avoid}}
+    @page{size:landscape;margin:12mm}
+    *{box-sizing:border-box}body{font-family:Segoe UI,Arial,sans-serif;color:#182126;margin:0;background:#fff}button{margin:0 0 12px;padding:8px 12px}h1{font-size:22px;margin:0 0 4px}p{margin:3px 0;color:#5d6d76}.general-data{margin-bottom:14px;font-size:10px}.layout{display:grid;grid-template-columns:48% 52%;gap:16px;align-items:start;margin-bottom:14px}.plan-image{display:block;width:100%;border:1px solid #cbd6da}h2{font-size:15px;margin:0 0 7px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed}.zone-table{font-size:9px}.main-table{font-size:6.5px}.zone-table th,.zone-table td{border:1px solid #cbd6da;padding:5px;text-align:left}.zone-table th{background:#eaf1ef}.main-table th,.main-table td{border:0.5px solid #111;padding:1.5px 2px;text-align:center;vertical-align:middle;overflow-wrap:anywhere}.main-table thead th{font-weight:700;background:#fff}.main-table thead tr:first-child th{font-size:7px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:13px}.table-title{margin-top:4px}.report-total{margin:6px 8% 0 0;text-align:right;font-size:9px;font-weight:700}@media print{button{display:none}.layout,.main-table{break-inside:avoid}}
   </style></head><body><button onclick="window.print()">Imprimir o guardar como PDF</button>
-    <header class="report-title"><h1>SOFTWARE TOPOGRAFÍA v1.3</h1><p>${escapeHtml(state.projectName)}</p><p>Levantamiento topográfico por azimuts</p></header>
-    <div class="meta-grid">
-      <table class="meta-table"><tbody><tr><td>Nombre del levantamiento</td><td>${escapeHtml(state.projectName)}</td></tr><tr><td>Fecha de elaboración</td><td>${escapeHtml(dateText)}</td></tr><tr><td>Coordenada Este inicial</td><td>${formatNumber(toNumber(state.station.east))} ${unitSymbol()}</td></tr><tr><td>Coordenada Norte inicial</td><td>${formatNumber(toNumber(state.station.north))} ${unitSymbol()}</td></tr><tr><td>Cantidad de zonas</td><td>${state.zones.length}</td></tr></tbody></table>
-      <table class="meta-table"><tbody><tr><td>Formato de papel</td><td>${state.drawingScale.paper}</td></tr><tr><td>Orientación</td><td>${state.drawingScale.orientation}</td></tr><tr><td>Escala</td><td>1:${scale.selected}</td></tr><tr><td>Área</td><td>${formatNumber(totalArea)} ${areaUnitSymbol()}</td></tr><tr><td>Perímetro / longitud</td><td>${formatNumber(totalPerimeter)} ${unitSymbol()}</td></tr></tbody></table>
-    </div>
+    <h1>${escapeHtml(state.projectName)}</h1>
+    <p>Estación inicial: E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p>
+    <p class="general-data">Fecha: ${escapeHtml(dateText)} · Formato ${state.drawingScale.paper} ${state.drawingScale.orientation} · Escala 1:${scale.selected} · Área total: ${formatNumber(totalArea)} ${areaUnitSymbol()} · Perímetro / longitud: ${formatNumber(totalPerimeter)} ${unitSymbol()}</p>
+    <div class="layout"><img class="plan-image" src="${image}" alt="Plano del levantamiento"><div><h2>Resumen por zonas</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows}</tbody></table></div></div>
+    <h2 class="table-title">Puntos y resultados</h2>
     <table class="main-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead><tbody>${initialRow}${pointRows || '<tr><td colspan="22">No hay puntos calculados.</td></tr>'}</tbody></table>
     <div class="report-total">Perímetro / longitud total: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
-    <h2 class="section-title">Información de zonas</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows}</tbody></table>
-    <section class="plan-sheet"><div class="scale-caption">${state.drawingScale.paper} ${state.drawingScale.orientation} · Escala 1:${scale.selected}</div><img src="${image}" alt="Plano técnico del levantamiento"></section>
   </body></html>`);
   popup.document.close();
   popup.focus();
