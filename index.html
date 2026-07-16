@@ -70,54 +70,43 @@
 
         <main class="view-host">
           <section id="view-plan" class="app-view is-active" data-view-panel="plan" aria-labelledby="planTitle">
+            <div class="view-heading plan-heading">
+              <div>
+                <p class="section-kicker">Plano cartesiano</p>
+                <h1 id="planTitle">Plano principal</h1>
+              </div>
+              <div class="plan-zoom" aria-label="Zoom del plano">
+                <button id="zoomOutBtn" class="icon-command" type="button" title="Alejar" aria-label="Alejar">−</button>
+                <button id="zoomInBtn" class="icon-command" type="button" title="Acercar" aria-label="Acercar">＋</button>
+              </div>
+            </div>
             <div class="plan-layout">
               <div class="plan-main">
-                <div class="view-heading plan-heading">
-                  <div>
-                    <p class="section-kicker">Plano cartesiano</p>
-                    <h1 id="planTitle">Plano principal</h1>
-                  </div>
-                  <div class="plan-zoom" aria-label="Zoom del plano">
-                    <button id="zoomOutBtn" class="icon-command" type="button" title="Alejar" aria-label="Alejar">−</button>
-                    <button id="zoomInBtn" class="icon-command" type="button" title="Acercar" aria-label="Acercar">＋</button>
-                  </div>
-                </div>
                 <div class="canvas-wrap" id="canvasWrap">
                   <canvas id="plotCanvas" width="1200" height="1200" aria-label="Gráfica de coordenadas Este y Norte"></canvas>
                 </div>
               </div>
 
-              <aside class="quick-tools" aria-label="Herramientas rápidas del plano">
-                <button id="quickAddPointBtn" type="button" title="Agregar un punto"><span aria-hidden="true">＋</span><span>Agregar</span></button>
-                <button id="quickSelectPointBtn" type="button" title="Seleccionar un punto en el plano"><span aria-hidden="true">⌖</span><span>Seleccionar</span></button>
-                <button id="quickMovePointBtn" type="button" title="Editar el punto seleccionado"><span aria-hidden="true">↔</span><span>Mover</span></button>
-                <button id="quickClearPointBtn" type="button" title="Limpiar los valores del punto seleccionado"><span aria-hidden="true">×</span><span>Limpiar</span></button>
-                <button id="quickMeasureBtn" type="button" title="Medir distancia entre dos puntos"><span aria-hidden="true">⌁</span><span>Medir</span></button>
-                <button id="quickPointsBtn" type="button" title="Mostrar u ocultar los puntos"><span aria-hidden="true">●</span><span>Ocultar puntos</span></button>
-                <button id="quickLinesBtn" type="button" title="Mostrar u ocultar las líneas"><span aria-hidden="true">⌁</span><span>Ocultar líneas</span></button>
-                <button id="quickGridBtn" type="button" title="Mostrar u ocultar la cuadrícula"><span aria-hidden="true">#</span><span>Cuadrícula</span></button>
-                <div id="selectedPointStatus" class="selection-status">Sin selección</div>
+              <aside class="plan-side-panel">
+                <section class="stats-panel" aria-label="Resultados del levantamiento">
+                  <button class="metric" type="button" data-view-target="calculations"><span class="metric-icon" aria-hidden="true">●</span><span class="metric-copy"><small>Puntos válidos</small><strong id="pointsCount">0</strong></span></button>
+                  <button class="metric" type="button" data-view-target="calculations"><span class="metric-icon" aria-hidden="true">▱</span><span class="metric-copy"><small>Área de zona activa</small><strong id="areaValue">0.000 m²</strong></span></button>
+                  <button class="metric" type="button" data-view-target="calculations"><span class="metric-icon" aria-hidden="true">⌁</span><span class="metric-copy"><small id="measureLabel">Perímetro de zona activa</small><strong id="perimeterValue">0.000 m</strong></span></button>
+                  <button class="metric" type="button" data-view-target="calculations"><span class="metric-icon" aria-hidden="true">⌖</span><span class="metric-copy"><small>Última coordenada</small><strong id="lastPoint">E 0 / N 0</strong></span></button>
+                </section>
+                <div class="quick-tools" aria-label="Herramientas rápidas del plano">
+                  <button id="quickAddPointBtn" type="button" title="Agregar un punto"><span aria-hidden="true">＋</span><span>Agregar</span></button>
+                  <button id="quickSelectPointBtn" type="button" title="Seleccionar un punto en el plano"><span aria-hidden="true">⌖</span><span>Seleccionar</span></button>
+                  <button id="quickMovePointBtn" type="button" title="Editar el punto seleccionado"><span aria-hidden="true">↔</span><span>Mover</span></button>
+                  <button id="quickClearPointBtn" type="button" title="Limpiar los valores del punto seleccionado"><span aria-hidden="true">×</span><span>Limpiar</span></button>
+                  <button id="quickMeasureBtn" type="button" title="Medir distancia entre dos puntos"><span aria-hidden="true">⌁</span><span>Medir</span></button>
+                  <button id="quickPointsBtn" type="button" title="Mostrar u ocultar los puntos"><span aria-hidden="true">●</span><span>Ocultar puntos</span></button>
+                  <button id="quickLinesBtn" type="button" title="Mostrar u ocultar las líneas"><span aria-hidden="true">⌁</span><span>Ocultar líneas</span></button>
+                  <button id="quickGridBtn" type="button" title="Mostrar u ocultar la cuadrícula"><span aria-hidden="true">#</span><span>Cuadrícula</span></button>
+                  <div id="selectedPointStatus" class="selection-status">Sin selección</div>
+                </div>
               </aside>
             </div>
-
-            <section class="stats-panel" aria-label="Resultados del levantamiento">
-              <button class="metric" type="button" data-view-target="calculations">
-                <span class="metric-icon" aria-hidden="true">●</span>
-                <span class="metric-copy"><small>Puntos válidos</small><strong id="pointsCount">0</strong></span>
-              </button>
-              <button class="metric" type="button" data-view-target="calculations">
-                <span class="metric-icon" aria-hidden="true">▱</span>
-                <span class="metric-copy"><small>Área de zona activa</small><strong id="areaValue">0.000 m²</strong></span>
-              </button>
-              <button class="metric" type="button" data-view-target="calculations">
-                <span class="metric-icon" aria-hidden="true">⌁</span>
-                <span class="metric-copy"><small id="measureLabel">Perímetro de zona activa</small><strong id="perimeterValue">0.000 m</strong></span>
-              </button>
-              <button class="metric" type="button" data-view-target="calculations">
-                <span class="metric-icon" aria-hidden="true">⌖</span>
-                <span class="metric-copy"><small>Última coordenada</small><strong id="lastPoint">E 0 / N 0</strong></span>
-              </button>
-            </section>
           </section>
 
           <section id="view-points" class="app-view" data-view-panel="points" aria-labelledby="pointsTitle">
@@ -155,7 +144,7 @@
               <table class="calculation-table">
                 <thead>
                   <tr>
-                    <th>Zona</th><th>Número del punto</th><th>Grados</th><th>Minutos</th><th>Segundos</th><th>Distancia</th><th>Descripción</th><th>Azimut decimal</th><th>Rumbo</th><th>Proyección Este</th><th>Proyección Norte</th><th>Coordenada Este</th><th>Coordenada Norte</th><th>Estado</th><th>Acciones</th>
+                    <th>Zona</th><th>Número del punto</th><th>Grados</th><th>Minutos</th><th>Segundos</th><th id="distanceHeader">Distancia (m)</th><th>Descripción</th><th>Coordenada Este</th><th>Coordenada Norte</th><th>Estado</th><th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="observationsBody"></tbody>
@@ -260,6 +249,16 @@
                   <label><span>Apariencia</span><select id="appearanceSelect"><option value="dark">Oscura</option><option value="light">Clara</option></select></label>
                 </div>
               </section>
+              <section class="settings-section drawing-scale-panel" aria-labelledby="drawingScaleTitle">
+                <h2 id="drawingScaleTitle">Escala de dibujo</h2>
+                <div class="drawing-scale-controls">
+                  <label>Formato de papel<select id="paperFormatSelect"><option value="A1">A1</option><option value="A2">A2</option><option value="A3">A3</option><option value="A4">A4</option></select></label>
+                  <label>Orientación<select id="paperOrientationSelect"><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
+                  <label>Modo<select id="drawingScaleModeSelect"><option value="auto">Automática</option><option value="manual">Manual</option></select></label>
+                  <label>Escala seleccionada<select id="drawingScaleSelect"><option value="50">1:50</option><option value="100">1:100</option><option value="200">1:200</option><option value="250">1:250</option><option value="500">1:500</option><option value="1000">1:1000</option><option value="2000">1:2000</option><option value="2500">1:2500</option><option value="5000">1:5000</option><option value="10000">1:10000</option></select></label>
+                </div>
+                <div id="drawingScaleInfo" class="drawing-scale-info" aria-live="polite"></div>
+              </section>
               <section class="settings-section">
                 <h2>Visualización y figuras</h2>
                 <div class="settings-checks">
@@ -351,7 +350,7 @@
         <td><input data-field="seconds" class="compact" type="number" step="0.001" min="0" max="59.999" /><small class="field-error" data-error="seconds"></small></td>
         <td><input data-field="distance" class="compact" type="number" step="0.001" min="0" /></td>
         <td><input data-field="description" class="description-input" type="text" /></td>
-        <td data-output="azimuth">-</td><td data-output="bearing">-</td><td data-output="deltaEast">-</td><td data-output="deltaNorth">-</td><td data-output="east">-</td><td data-output="north">-</td>
+        <td data-output="east">-</td><td data-output="north">-</td>
         <td><span class="point-status" data-output="status">Incompleto</span></td>
         <td><div class="row-actions"><button data-action="up" type="button" title="Subir punto" aria-label="Subir punto">↑</button><button data-action="down" type="button" title="Bajar punto" aria-label="Bajar punto">↓</button><button data-action="delete" class="delete-button" type="button" title="Limpiar valores" aria-label="Limpiar valores del punto">×</button></div></td>
       </tr>

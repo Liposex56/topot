@@ -3,6 +3,15 @@ const PROJECTS_KEY = "levantamientos-topograficos-projects-v1";
 const CURRENT_PROJECT_KEY = "levantamientos-topograficos-current-project-v1";
 const HISTORY_LIMIT = 60;
 const ZONE_COLORS = ["#0b6b5d", "#2962a3", "#d36b22", "#6d7378", "#8a4f9e", "#b13f4b"];
+const PAPER_FORMATS = {
+  A1: { width: 594, height: 841 },
+  A2: { width: 420, height: 594 },
+  A3: { width: 297, height: 420 },
+  A4: { width: 210, height: 297 },
+};
+const DRAWING_SCALES = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
+const PAPER_MARGIN_MM = 10;
+const TITLE_BLOCK_MM = 35;
 
 const els = {
   stationEast: document.querySelector("#stationEast"),
@@ -64,6 +73,12 @@ const els = {
   quickLines: document.querySelector("#quickLinesBtn"),
   quickGrid: document.querySelector("#quickGridBtn"),
   selectedPointStatus: document.querySelector("#selectedPointStatus"),
+  paperFormat: document.querySelector("#paperFormatSelect"),
+  paperOrientation: document.querySelector("#paperOrientationSelect"),
+  drawingScaleMode: document.querySelector("#drawingScaleModeSelect"),
+  drawingScale: document.querySelector("#drawingScaleSelect"),
+  drawingScaleInfo: document.querySelector("#drawingScaleInfo"),
+  distanceHeader: document.querySelector("#distanceHeader"),
   pointSearch: document.querySelector("#pointSearch"),
   pointZoneFilter: document.querySelector("#pointZoneFilter"),
   pointStatusFilter: document.querySelector("#pointStatusFilter"),
@@ -193,6 +208,7 @@ function createBlankState(projectName = "Levantamiento sin nombre") {
     appearance: "dark",
     axisDecimals: 0,
     view: { zoom: 1, panEast: 0, panNorth: 0 },
+    drawingScale: { paper: "A3", orientation: "horizontal", mode: "auto", denominator: 500 },
     zones: [mainZone],
     activeZoneId: mainZone.id,
     observations: [defaultObservation(1, mainZone.id)],
@@ -253,6 +269,14 @@ function migrateState(rawState) {
       zoom: clampNumber(raw.view?.zoom || 1, 0.5, 20),
       panEast: toNumber(raw.view?.panEast),
       panNorth: toNumber(raw.view?.panNorth),
+    },
+    drawingScale: {
+      paper: PAPER_FORMATS[raw.drawingScale?.paper] ? raw.drawingScale.paper : fallback.drawingScale.paper,
+      orientation: raw.drawingScale?.orientation === "vertical" ? "vertical" : "horizontal",
+      mode: raw.drawingScale?.mode === "manual" ? "manual" : "auto",
+      denominator: DRAWING_SCALES.includes(Number(raw.drawingScale?.denominator))
+        ? Number(raw.drawingScale.denominator)
+        : fallback.drawingScale.denominator,
     },
     zones,
     activeZoneId,
@@ -1116,30 +1140,35 @@ function renderCalculations(survey) {
     const analysis = survey.analyses.get(zone.id);
     const rows = analysis.rows.filter(({ point }) => point.hasData && (!pointFilter || point.uid === pointFilter));
     if (pointFilter && !rows.length) return "";
-    const rowHtml = rows.map(({ point, index }) => {
+    const pointHtml = rows.map(({ point, index }) => {
       const source = state.observations[index];
-      const errors = [...new Set(Object.values(survey.rowErrors[index]).flat())];
       const gms = `${formatPlainNumber(source.degrees, 0)}\u00b0 ${formatPlainNumber(source.minutes, 0)}' ${formatPlainNumber(source.seconds, 3)}\"`;
-      return `<tr>
-        <td>${escapeHtml(point.id || "-")}</td><td>${escapeHtml(gms)}</td>
-        <td>${point.hasCoordinates ? `${formatNumber(point.azimuth)}\u00b0` : "-"}</td>
-        <td>${point.hasCoordinates ? escapeHtml(point.bearing) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.deltaEast) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.deltaNorth) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.east) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.north) : "-"}</td>
-        <td>${escapeHtml(point.status)}</td><td>${escapeHtml(errors.join(" ") || "Sin errores")}</td>
-      </tr>`;
+      const details = [];
+      if (zone?.name) details.push(zone.name);
+      else if (point.description) details.push("Sin zona");
+      if (point.description) details.push(point.description);
+      const title = `Punto ${point.id || "-"}${details.length ? ` (${details.join(", ")})` : ""}`;
+      const value = (number, suffix = "") => point.hasCoordinates ? `${formatNumber(number)}${suffix}` : "-";
+      return `<article class="calculation-point">
+        <h3>${escapeHtml(title)}</h3>
+        <div class="calculation-values">
+          <span><small>GMS</small><strong>${escapeHtml(gms)}</strong></span>
+          <span><small>Distancia</small><strong>${value(point.distance, ` ${unitSymbol()}`)}</strong></span>
+          <span><small>Azimut</small><strong>${value(point.azimuth, "\u00b0")}</strong></span>
+          <span><small>Rumbo</small><strong>${point.hasCoordinates ? escapeHtml(point.bearing) : "-"}</strong></span>
+          <span><small>Proyección Este</small><strong>${value(point.deltaEast, ` ${unitSymbol()}`)}</strong></span>
+          <span><small>Proyección Norte</small><strong>${value(point.deltaNorth, ` ${unitSymbol()}`)}</strong></span>
+          <span><small>Coordenada Este</small><strong>${value(point.east)}</strong></span>
+          <span><small>Coordenada Norte</small><strong>${value(point.north)}</strong></span>
+        </div>
+      </article>`;
     }).join("");
     const area = zone.type === "polygon" ? `<span>Area: ${formatNumber(analysis.area)} ${areaUnitSymbol()}</span>` : "";
     const measure = zone.type !== "points" ? `<span>${zone.type === "line" ? "Longitud" : "Perimetro"}: ${formatNumber(analysis.measure)} ${unitSymbol()}</span>` : "";
-    const closure = zone.type === "polygon" ? (zone.closed ? "figura cerrada" : "figura abierta") : "no aplica";
     return `<section class="calculation-zone" style="--zone-color:${escapeHtml(zone.color)}">
-      <div class="calculation-zone-heading"><h2>${escapeHtml(zone.name)}</h2><span class="zone-status ${analysis.statusClass}">${escapeHtml(analysis.status)}</span></div>
-      <div class="calculation-summary"><span>${escapeHtml(zoneTypeLabel(zone.type))}</span><span>${analysis.count} puntos validos</span>${area}${measure}<span>Cierre: ${closure}</span></div>
-      <div class="calculation-table-wrap"><table class="calculation-table"><thead><tr>
-        <th>Punto</th><th>GMS</th><th>Azimut decimal</th><th>Rumbo</th><th>Proy. Este</th><th>Proy. Norte</th><th>Coord. Este</th><th>Coord. Norte</th><th>Estado</th><th>Errores</th>
-      </tr></thead><tbody>${rowHtml || '<tr><td colspan="10">No hay observaciones para mostrar.</td></tr>'}</tbody></table></div>
+      <div class="calculation-zone-heading"><h2>${escapeHtml(zone.name)}</h2></div>
+      <div class="calculation-summary"><span>${escapeHtml(zoneTypeLabel(zone.type))}</span><span>${analysis.count} puntos</span>${area}${measure}</div>
+      <div class="calculation-points">${pointHtml || '<p class="empty-state">No hay observaciones para mostrar.</p>'}</div>
     </section>`;
   }).filter(Boolean).join("");
   els.calculationsContent.innerHTML = sections || '<p class="empty-state">No hay calculos que coincidan con los filtros.</p>';
@@ -1658,6 +1687,160 @@ function updateStats(survey) {
   els.quickGrid.classList.toggle("is-active", state.showGrid);
 }
 
+function drawingPaperDimensions() {
+  const format = PAPER_FORMATS[state.drawingScale.paper] || PAPER_FORMATS.A3;
+  return state.drawingScale.orientation === "horizontal"
+    ? { width: format.height, height: format.width }
+    : { width: format.width, height: format.height };
+}
+
+function drawingTerrainBounds(survey) {
+  const station = { east: toNumber(state.station.east), north: toNumber(state.station.north) };
+  const points = survey.points.filter((point) => point.hasCoordinates);
+  const planPoints = [station, ...points];
+  const eastValues = planPoints.map((point) => point.east);
+  const northValues = planPoints.map((point) => point.north);
+  return {
+    minEast: Math.min(...eastValues),
+    maxEast: Math.max(...eastValues),
+    minNorth: Math.min(...northValues),
+    maxNorth: Math.max(...northValues),
+  };
+}
+
+function drawingScaleDetails(survey) {
+  const paper = drawingPaperDimensions();
+  const bounds = drawingTerrainBounds(survey);
+  const coordinateToMeters = state.units === "ft" ? 0.3048 : 1;
+  const terrainWidth = (bounds.maxEast - bounds.minEast) * coordinateToMeters;
+  const terrainHeight = (bounds.maxNorth - bounds.minNorth) * coordinateToMeters;
+  const usefulWidth = Math.max(1, paper.width - PAPER_MARGIN_MM * 2);
+  const usefulHeight = Math.max(1, paper.height - PAPER_MARGIN_MM * 2 - TITLE_BLOCK_MM);
+  const needed = Math.max(
+    (terrainWidth * 1000) / usefulWidth,
+    (terrainHeight * 1000) / usefulHeight,
+    1
+  );
+  const recommended = DRAWING_SCALES.find((denominator) => denominator >= needed) || DRAWING_SCALES.at(-1);
+  const selected = state.drawingScale.mode === "auto" ? recommended : state.drawingScale.denominator;
+  const drawingWidth = (terrainWidth * 1000) / selected;
+  const drawingHeight = (terrainHeight * 1000) / selected;
+  const fits = drawingWidth <= usefulWidth + 1e-9 && drawingHeight <= usefulHeight + 1e-9;
+  return {
+    paper,
+    bounds,
+    usefulWidth,
+    usefulHeight,
+    terrainWidth,
+    terrainHeight,
+    needed,
+    recommended,
+    selected,
+    drawingWidth,
+    drawingHeight,
+    fits,
+  };
+}
+
+function renderDrawingScale(survey) {
+  const details = drawingScaleDetails(survey);
+  if (state.drawingScale.mode === "auto") state.drawingScale.denominator = details.selected;
+  els.paperFormat.value = state.drawingScale.paper;
+  els.paperOrientation.value = state.drawingScale.orientation;
+  els.drawingScaleMode.value = state.drawingScale.mode;
+  els.drawingScale.value = String(details.selected);
+  els.drawingScale.disabled = state.drawingScale.mode === "auto";
+  const orientation = state.drawingScale.orientation;
+  const fitMessage = details.fits
+    ? `El terreno cabe correctamente en ${state.drawingScale.paper} ${orientation} a escala 1:${details.selected}.`
+    : `El terreno no cabe completamente en ${state.drawingScale.paper} ${orientation} a escala 1:${details.selected}. Seleccione una hoja más grande o una escala con mayor denominador.`;
+  els.drawingScaleInfo.innerHTML = `
+    <span>Formato: <strong>${state.drawingScale.paper} ${orientation}</strong></span>
+    <span>Terreno: <strong>${formatNumber(details.terrainWidth, 2)} m × ${formatNumber(details.terrainHeight, 2)} m</strong></span>
+    <span>Escala recomendada: <strong>1:${details.recommended}</strong></span>
+    <span>Escala seleccionada: <strong>1:${details.selected}</strong></span>
+    <span>Tamaño en papel: <strong>${formatNumber(details.drawingWidth, 2)} mm × ${formatNumber(details.drawingHeight, 2)} mm</strong></span>
+    <span>Área útil: <strong>${formatNumber(details.usefulWidth, 0)} mm × ${formatNumber(details.usefulHeight, 0)} mm</strong></span>
+    <strong class="drawing-scale-result ${details.fits ? "fits" : "does-not-fit"}">${escapeHtml(fitMessage)}</strong>`;
+}
+
+function createTechnicalPlanCanvas(survey) {
+  const details = drawingScaleDetails(survey);
+  const pixelsPerMillimeter = 3;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(details.paper.width * pixelsPerMillimeter);
+  canvas.height = Math.round(details.paper.height * pixelsPerMillimeter);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(pixelsPerMillimeter, pixelsPerMillimeter);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, details.paper.width, details.paper.height);
+
+  const planLeft = PAPER_MARGIN_MM;
+  const planTop = PAPER_MARGIN_MM;
+  const planWidth = details.usefulWidth;
+  const planHeight = details.usefulHeight;
+  const coordinateToMillimeters = state.units === "ft" ? 304.8 : 1000;
+  const originX = planLeft + (planWidth - details.drawingWidth) / 2;
+  const originY = planTop + (planHeight - details.drawingHeight) / 2;
+  const x = (east) => originX + ((east - details.bounds.minEast) * coordinateToMillimeters) / details.selected;
+  const y = (north) => originY + ((details.bounds.maxNorth - north) * coordinateToMillimeters) / details.selected;
+
+  ctx.strokeStyle = "#111111";
+  ctx.lineWidth = 0.35;
+  ctx.strokeRect(planLeft, planTop, planWidth, planHeight);
+  state.zones.forEach((zone) => {
+    const analysis = survey.analyses.get(zone.id);
+    ctx.save();
+    ctx.strokeStyle = zone.color;
+    ctx.fillStyle = zone.color;
+    ctx.lineWidth = 0.65;
+    if (zone.type !== "points") {
+      analysis.segments.forEach((segment) => {
+        if (segment.length < 2) return;
+        ctx.beginPath();
+        segment.forEach((point, index) => {
+          if (index === 0) ctx.moveTo(x(point.east), y(point.north));
+          else ctx.lineTo(x(point.east), y(point.north));
+        });
+        if (zone.type === "polygon" && zone.closed && analysis.complete && segment.length === analysis.points.length) ctx.closePath();
+        ctx.stroke();
+      });
+    }
+    ctx.font = "3px Arial";
+    analysis.points.forEach((point) => {
+      const px = x(point.east);
+      const py = y(point.north);
+      ctx.beginPath();
+      ctx.arc(px, py, 1.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillText(point.id, px + 1.8, py - 1.4);
+    });
+    ctx.restore();
+  });
+
+  const stationX = x(toNumber(state.station.east));
+  const stationY = y(toNumber(state.station.north));
+  ctx.fillStyle = "#c9302c";
+  ctx.beginPath();
+  ctx.arc(stationX, stationY, 1.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = "bold 3px Arial";
+  ctx.fillText("BM", stationX + 2, stationY - 1.6);
+
+  const titleY = details.paper.height - PAPER_MARGIN_MM - TITLE_BLOCK_MM;
+  ctx.strokeStyle = "#111111";
+  ctx.lineWidth = 0.35;
+  ctx.strokeRect(PAPER_MARGIN_MM, titleY, details.paper.width - PAPER_MARGIN_MM * 2, TITLE_BLOCK_MM);
+  ctx.fillStyle = "#111111";
+  ctx.font = "bold 4px Arial";
+  ctx.fillText(state.projectName, PAPER_MARGIN_MM + 4, titleY + 9);
+  ctx.font = "3px Arial";
+  ctx.fillText(`Formato ${state.drawingScale.paper} ${state.drawingScale.orientation}`, PAPER_MARGIN_MM + 4, titleY + 18);
+  ctx.fillText(`Escala 1:${details.selected}`, PAPER_MARGIN_MM + 4, titleY + 26);
+  ctx.fillText(`E inicial ${formatNumber(toNumber(state.station.east))}  N inicial ${formatNumber(toNumber(state.station.north))}`, PAPER_MARGIN_MM + 80, titleY + 26);
+  return canvas;
+}
+
 function syncControls() {
   els.projectName.value = state.projectName;
   els.stationEast.value = state.station.east;
@@ -1672,6 +1855,12 @@ function syncControls() {
   els.appearance.value = state.appearance;
   document.body.dataset.theme = state.appearance;
   els.axisDecimals.value = String(state.axisDecimals);
+  els.paperFormat.value = state.drawingScale.paper;
+  els.paperOrientation.value = state.drawingScale.orientation;
+  els.drawingScaleMode.value = state.drawingScale.mode;
+  els.drawingScale.value = String(state.drawingScale.denominator);
+  els.drawingScale.disabled = state.drawingScale.mode === "auto";
+  els.distanceHeader.textContent = `Distancia (${unitSymbol()})`;
   renderProjectList();
   renderProjectsView();
   updateUndoButtons();
@@ -1679,6 +1868,7 @@ function syncControls() {
 
 function update(renderTable = true) {
   const survey = computeSurvey();
+  els.distanceHeader.textContent = `Distancia (${unitSymbol()})`;
   renderZoneSelectors();
   if (renderTable) renderRows(survey);
   else renderRowOutputs(survey);
@@ -1686,6 +1876,7 @@ function update(renderTable = true) {
   renderCalculations(survey);
   renderProjectsView();
   updateStats(survey);
+  renderDrawingScale(survey);
   if (activeView === "plan") drawPlot(survey);
   saveLocalState();
   updateUndoButtons();
@@ -2149,10 +2340,11 @@ function parseCsvLine(line) {
 }
 
 function exportGraphImage() {
-  drawPlot(computeSurvey());
-  els.canvas.toBlob((blob) => {
+  const survey = computeSurvey();
+  const technicalCanvas = createTechnicalPlanCanvas(survey);
+  technicalCanvas.toBlob((blob) => {
     if (!blob) return;
-    downloadFile(blob, `${safeFileName(state.projectName)}-grafica.png`, "image/png");
+    downloadFile(blob, `${safeFileName(state.projectName)}-plano-${state.drawingScale.paper}-${state.drawingScale.orientation}.png`, "image/png");
   }, "image/png");
 }
 
@@ -2162,26 +2354,95 @@ function escapeHtml(value) {
   })[character]);
 }
 
+function bearingComponents(azimuth) {
+  const normalized = ((azimuth % 360) + 360) % 360;
+  let northSouth = "N";
+  let eastWest = "E";
+  let angle = normalized;
+  if (normalized > 90 && normalized <= 180) {
+    northSouth = "S";
+    angle = 180 - normalized;
+  } else if (normalized > 180 && normalized <= 270) {
+    northSouth = "S";
+    eastWest = "W";
+    angle = normalized - 180;
+  } else if (normalized > 270) {
+    eastWest = "W";
+    angle = 360 - normalized;
+  }
+  return { northSouth, eastWest, ...decimalToDms(angle) };
+}
+
+function reportSegments(survey) {
+  const segments = new Map();
+  state.zones.forEach((zone) => {
+    const points = survey.analyses.get(zone.id).points;
+    points.forEach((point, index) => {
+      const next = points[index + 1] || (zone.type === "polygon" && zone.closed && points.length > 2 ? points[0] : null);
+      if (!next || zone.type === "points") return;
+      segments.set(point.uid, {
+        distance: Math.hypot(next.east - point.east, next.north - point.north),
+        label: `d${point.id || index + 1}-${next.id || (index + 2)}`,
+      });
+    });
+  });
+  return segments;
+}
+
 function printReport() {
   const survey = computeSurvey();
-  drawPlot(survey);
-  const image = els.canvas.toDataURL("image/png");
+  const scale = drawingScaleDetails(survey);
+  const image = createTechnicalPlanCanvas(survey).toDataURL("image/png");
+  const segmentByPoint = reportSegments(survey);
+  const validPoints = survey.points.filter((point) => point.hasCoordinates);
+  const totalArea = state.zones.reduce((sum, zone) => sum + survey.analyses.get(zone.id).area, 0);
+  const totalPerimeter = state.zones.reduce((sum, zone) => sum + survey.analyses.get(zone.id).measure, 0);
   const zoneRows = state.zones.map((zone) => {
     const analysis = survey.analyses.get(zone.id);
-    return `<tr><td><span class="swatch" style="background:${escapeHtml(zone.color)}"></span>${escapeHtml(zone.name)}</td><td>${escapeHtml(zoneTypeLabel(zone.type))}</td><td>${analysis.count}</td><td>${formatNumber(analysis.area)} ${areaUnitSymbol()}</td><td>${formatNumber(analysis.measure)} ${unitSymbol()}</td><td>${escapeHtml(analysis.status)}</td></tr>`;
+    return `<tr><td>${escapeHtml(zone.name)}</td><td>${escapeHtml(zoneTypeLabel(zone.type))}</td><td>${analysis.count}</td><td>${formatNumber(analysis.area)}</td><td>${formatNumber(analysis.measure)}</td></tr>`;
   }).join("");
-  const pointRows = survey.points.filter((point) => point.hasCoordinates).map((point) => {
+  const pointRows = validPoints.map((point) => {
     const zone = state.zones.find((item) => item.id === point.zoneId);
-    return `<tr><td>${escapeHtml(zone?.name)}</td><td>${escapeHtml(point.id)}</td><td>${formatNumber(point.east)}</td><td>${formatNumber(point.north)}</td><td>0</td><td>${escapeHtml(point.description)}</td><td>${escapeHtml(point.status)}</td></tr>`;
+    const source = point.source;
+    const bearing = bearingComponents(point.azimuth);
+    const segment = segmentByPoint.get(point.uid);
+    const northProjection = point.deltaNorth >= 0 ? formatNumber(point.deltaNorth) : "";
+    const southProjection = point.deltaNorth < 0 ? formatNumber(Math.abs(point.deltaNorth)) : "";
+    const eastProjection = point.deltaEast >= 0 ? formatNumber(point.deltaEast) : "";
+    const westProjection = point.deltaEast < 0 ? formatNumber(Math.abs(point.deltaEast)) : "";
+    return `<tr>
+      <td>${escapeHtml(point.id)}</td><td>${escapeHtml(zone?.name || "")}</td><td>${escapeHtml(point.description)}</td>
+      <td>${formatPlainNumber(source.degrees, 0)}</td><td>${formatPlainNumber(source.minutes, 0)}</td><td>${formatPlainNumber(source.seconds, 3)}</td>
+      <td>${formatNumber(point.distance)}</td><td>${formatNumber(Math.sin(point.radians), 6)}</td><td>${formatNumber(Math.cos(point.radians), 6)}</td>
+      <td>${bearing.northSouth}</td><td>${bearing.degrees}</td><td>${bearing.minutes}</td><td>${formatPlainNumber(bearing.seconds, 3)}</td><td>${bearing.eastWest}</td>
+      <td>${northProjection}</td><td>${southProjection}</td><td>${eastProjection}</td><td>${westProjection}</td>
+      <td>${formatNumber(point.north)}</td><td>${formatNumber(point.east)}</td>
+      <td>${segment ? formatNumber(segment.distance) : ""}</td><td>${segment ? escapeHtml(segment.label) : ""}</td>
+    </tr>`;
   }).join("");
+  const initialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="15"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
+  const modifiedDate = new Date(state.modifiedAt);
+  const dateText = Number.isNaN(modifiedDate.getTime()) ? "" : modifiedDate.toLocaleDateString("es-CO");
+  const pageOrientation = state.drawingScale.orientation === "horizontal" ? "landscape" : "portrait";
   const popup = window.open("", "_blank", "width=1100,height=800");
   if (!popup) {
     showToast("El navegador bloqueó la ventana de impresión. Permita las ventanas emergentes e inténtelo de nuevo.", true);
     return;
   }
   popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(state.projectName)}</title><style>
-    @page{size:landscape;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;color:#182126;margin:0}h1{font-size:22px;margin:0 0 4px}p{margin:3px 0 14px;color:#5d6d76}.layout{display:grid;grid-template-columns:42% 58%;gap:16px;align-items:start}img{width:100%;border:1px solid #cbd6da}h2{font-size:15px;margin:16px 0 7px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #cbd6da;padding:5px;text-align:left}th{background:#eaf1ef}.swatch{display:inline-block;width:10px;height:10px;margin-right:6px}@media print{button{display:none}.layout{break-inside:avoid}}button{margin-bottom:12px;padding:8px 12px}
-  </style></head><body><button onclick="window.print()">Imprimir o guardar como PDF</button><h1>${escapeHtml(state.projectName)}</h1><p>Estación inicial: E ${formatNumber(state.station.east)} / N ${formatNumber(state.station.north)}</p><div class="layout"><img src="${image}" alt="Gráfica del levantamiento"><div><h2>Resumen por zonas</h2><table><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área</th><th>Perímetro / longitud</th><th>Estado</th></tr></thead><tbody>${zoneRows}</tbody></table></div></div><h2>Coordenadas</h2><table><thead><tr><th>Zona</th><th>Punto</th><th>Este</th><th>Norte</th><th>Z</th><th>Descripción</th><th>Estado</th></tr></thead><tbody>${pointRows}</tbody></table></body></html>`);
+    @page{size:${state.drawingScale.paper} ${pageOrientation};margin:8mm}
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0;background:#fff}button{margin:0 0 8px;padding:7px 11px}.report-title{text-align:center;margin:0 0 12px}.report-title h1{font-size:15px;margin:0 0 3px}.report-title p{font-size:11px;margin:2px 0}.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:5px}.meta-table{width:100%;border-collapse:collapse;font-size:8px}.meta-table td{padding:1px 2px}.meta-table td:first-child{width:52%}.meta-table td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums}.main-table,.zone-table{width:100%;border-collapse:collapse;table-layout:fixed}.main-table{font-size:6.5px}.main-table th,.main-table td,.zone-table th,.zone-table td{border:0.5px solid #111;padding:1.5px 2px;text-align:center;vertical-align:middle;overflow-wrap:anywhere}.main-table thead th{font-weight:700;background:#fff}.main-table thead tr:first-child th{font-size:7px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:13px}.report-total{margin:6px 8% 10px 0;text-align:right;font-size:9px;font-weight:700}.zone-table{margin-top:8px;font-size:7.5px}.zone-table th{font-weight:700}.section-title{font-size:10px;margin:9px 0 4px}.plan-sheet{margin-top:10px;break-before:page}.plan-sheet img{display:block;width:100%;height:auto;border:0.5px solid #111}.scale-caption{text-align:right;font-size:9px;font-weight:700;margin:4px 0}@media print{button{display:none}.main-table,.meta-grid,.zone-table{break-inside:avoid}}
+  </style></head><body><button onclick="window.print()">Imprimir o guardar como PDF</button>
+    <header class="report-title"><h1>SOFTWARE TOPOGRAFÍA v1.3</h1><p>${escapeHtml(state.projectName)}</p><p>Levantamiento topográfico por azimuts</p></header>
+    <div class="meta-grid">
+      <table class="meta-table"><tbody><tr><td>Nombre del levantamiento</td><td>${escapeHtml(state.projectName)}</td></tr><tr><td>Fecha de elaboración</td><td>${escapeHtml(dateText)}</td></tr><tr><td>Coordenada Este inicial</td><td>${formatNumber(toNumber(state.station.east))} ${unitSymbol()}</td></tr><tr><td>Coordenada Norte inicial</td><td>${formatNumber(toNumber(state.station.north))} ${unitSymbol()}</td></tr><tr><td>Cantidad de zonas</td><td>${state.zones.length}</td></tr></tbody></table>
+      <table class="meta-table"><tbody><tr><td>Formato de papel</td><td>${state.drawingScale.paper}</td></tr><tr><td>Orientación</td><td>${state.drawingScale.orientation}</td></tr><tr><td>Escala</td><td>1:${scale.selected}</td></tr><tr><td>Área</td><td>${formatNumber(totalArea)} ${areaUnitSymbol()}</td></tr><tr><td>Perímetro / longitud</td><td>${formatNumber(totalPerimeter)} ${unitSymbol()}</td></tr></tbody></table>
+    </div>
+    <table class="main-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead><tbody>${initialRow}${pointRows || '<tr><td colspan="22">No hay puntos calculados.</td></tr>'}</tbody></table>
+    <div class="report-total">Perímetro / longitud total: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
+    <h2 class="section-title">Información de zonas</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows}</tbody></table>
+    <section class="plan-sheet"><div class="scale-caption">${state.drawingScale.paper} ${state.drawingScale.orientation} · Escala 1:${scale.selected}</div><img src="${image}" alt="Plano técnico del levantamiento"></section>
+  </body></html>`);
   popup.document.close();
   popup.focus();
 }
@@ -2522,6 +2783,26 @@ els.clearPointFilters.addEventListener("click", () => {
 });
 els.calculationZoneFilter.addEventListener("change", () => renderCalculations(computeSurvey()));
 els.calculationPointFilter.addEventListener("change", () => renderCalculations(computeSurvey()));
+els.paperFormat.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.paper = els.paperFormat.value;
+  update(false);
+});
+els.paperOrientation.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.orientation = els.paperOrientation.value;
+  update(false);
+});
+els.drawingScaleMode.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.mode = els.drawingScaleMode.value;
+  update(false);
+});
+els.drawingScale.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.denominator = Number(els.drawingScale.value);
+  update(false);
+});
 els.quickSelectPoint.addEventListener("click", () => setQuickMode("select"));
 els.quickMovePoint.addEventListener("click", () => {
   const index = selectedPointIndex();
