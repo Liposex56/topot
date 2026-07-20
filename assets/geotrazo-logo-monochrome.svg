@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" role="img" aria-labelledby="title description">
+  <title id="title">GeoTrazo monocromático</title>
+  <desc id="description">Sistema de levantamientos topográficos</desc>
+  <g transform="translate(2 4) scale(.92)" fill="none" stroke="#111111" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M47 16 39 9 22 8 10 20v23l12 11 24-4V34H32" stroke-width="4.5"/>
+    <path d="M32 19V3m-6 7 6-7 6 7M32 34h14" stroke-width="3.5"/>
+    <circle cx="22" cy="8" r="3.2" fill="#ffffff" stroke-width="2.5"/><circle cx="10" cy="43" r="3.2" fill="#ffffff" stroke-width="2.5"/><circle cx="46" cy="50" r="3.2" fill="#ffffff" stroke-width="2.5"/>
+    <circle cx="32" cy="34" r="4" fill="#111111" stroke="#ffffff" stroke-width="2"/>
+  </g>
+  <text x="70" y="34" fill="#111111" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="750">GeoTrazo</text>
+  <text x="71" y="54" fill="#444444" font-family="Segoe UI, Arial, sans-serif" font-size="10.5" font-weight="600">Sistema de levantamientos topográficos</text>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Símbolo de GeoTrazo</title>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M47 16 39 9 22 8 10 20v23l12 11 24-4V34H32" stroke="#304852" stroke-width="4.5"/>
+    <path d="M32 19V3m-6 7 6-7 6 7" stroke="#22b8d6" stroke-width="3.5"/>
+    <path d="M32 34h14" stroke="#22b8d6" stroke-width="4.5"/>
+  </g>
+  <g fill="#ffffff" stroke="#22b8d6" stroke-width="2.5">
+    <circle cx="22" cy="8" r="3.2"/>
+    <circle cx="10" cy="43" r="3.2"/>
+    <circle cx="46" cy="50" r="3.2"/>
+  </g>
+  <circle cx="32" cy="34" r="4" fill="#22b8d6" stroke="#ffffff" stroke-width="2"/>
+</svg>
