@@ -4,6 +4,7 @@ const CURRENT_PROJECT_KEY = "levantamientos-topograficos-current-project-v1";
 const HISTORY_LIMIT = 60;
 const ZONE_COLORS = ["#0b6b5d", "#2962a3", "#d36b22", "#6d7378", "#8a4f9e", "#b13f4b"];
 const PAPER_FORMATS = {
+  A0: { width: 841, height: 1189 },
   A1: { width: 594, height: 841 },
   A2: { width: 420, height: 594 },
   A3: { width: 297, height: 420 },
@@ -84,6 +85,7 @@ const els = {
   pointStatusFilter: document.querySelector("#pointStatusFilter"),
   clearPointFilters: document.querySelector("#clearPointFiltersBtn"),
   pointsEmptyState: document.querySelector("#pointsEmptyState"),
+  sortPoints: document.querySelector("#sortPointsBtn"),
   calculationZoneFilter: document.querySelector("#calculationZoneFilter"),
   calculationPointFilter: document.querySelector("#calculationPointFilter"),
   calculationsContent: document.querySelector("#calculationsContent"),
@@ -93,7 +95,6 @@ const els = {
   gridSize: document.querySelector("#gridSizeSelect"),
   appearance: document.querySelector("#appearanceSelect"),
   showPointNumbers: document.querySelector("#showPointNumbers"),
-  autoClosePolygons: document.querySelector("#autoClosePolygons"),
   pointDialog: document.querySelector("#pointDialog"),
   pointForm: document.querySelector("#pointForm"),
   pointDialogTitle: document.querySelector("#pointDialogTitle"),
@@ -164,7 +165,7 @@ function createZone(overrides = {}) {
     type,
     description: String(overrides.description || ""),
     visible: overrides.visible !== false,
-    closed: type === "polygon" ? overrides.closed !== false : false,
+    closed: type === "polygon",
     reference: {
       type: ["station", "point", "custom"].includes(overrides.reference?.type)
         ? overrides.reference.type
@@ -202,7 +203,6 @@ function createBlankState(projectName = "Levantamiento sin nombre") {
     showGrid: true,
     showZoneNames: true,
     showPointNumbers: true,
-    autoClosePolygons: true,
     units: "m",
     gridSize: 0,
     appearance: "dark",
@@ -260,7 +260,6 @@ function migrateState(rawState) {
     showGrid: raw.showGrid !== false,
     showZoneNames: raw.showZoneNames !== false,
     showPointNumbers: raw.showPointNumbers !== false,
-    autoClosePolygons: raw.autoClosePolygons !== false,
     units: raw.units === "ft" ? "ft" : "m",
     gridSize: [0, 1, 5, 10, 25, 50, 100].includes(Number(raw.gridSize)) ? Number(raw.gridSize) : 0,
     appearance: raw.appearance === "light" ? "light" : "dark",
@@ -760,18 +759,37 @@ function openPointDialog(index = null) {
   }, 0);
 }
 
+function rejectPointValue(input, message) {
+  input.setCustomValidity(message);
+  input.reportValidity();
+  input.focus();
+  showToast(message, true);
+}
+
+function clearPointValidity() {
+  [els.pointDegrees, els.pointMinutes, els.pointSeconds, els.pointDistance].forEach((input) => input.setCustomValidity(""));
+}
+
 function savePointFromDialog() {
+  clearPointValidity();
   const id = els.pointNumber.value.replace(/[^0-9]/g, "");
   const degrees = Number(els.pointDegrees.value);
   const minutes = Number(els.pointMinutes.value);
   const seconds = Number(els.pointSeconds.value);
   const distance = Number(els.pointDistance.value);
   if (!isPositiveInteger(id)) return showToast("El n\u00famero del punto debe ser un entero positivo.", true);
-  if (!Number.isFinite(degrees) || degrees < 0 || degrees > 360) return showToast("Los grados deben estar entre 0 y 360.", true);
-  if (!Number.isFinite(minutes) || minutes < 0 || minutes >= 60) return showToast("Los minutos deben ser menores que 60.", true);
-  if (!Number.isFinite(seconds) || seconds < 0 || seconds >= 60) return showToast("Los segundos deben ser menores que 60.", true);
+  if (!Number.isFinite(degrees)) return rejectPointValue(els.pointDegrees, "Ingrese un valor válido.");
+  if (degrees < 0) return rejectPointValue(els.pointDegrees, "El valor debe ser mayor o igual a 0.");
+  if (degrees > 360) return rejectPointValue(els.pointDegrees, "El valor debe ser menor o igual a 360.");
+  if (!Number.isFinite(minutes)) return rejectPointValue(els.pointMinutes, "Ingrese un valor válido.");
+  if (minutes < 0) return rejectPointValue(els.pointMinutes, "El valor debe ser mayor o igual a 0.");
+  if (minutes >= 60) return rejectPointValue(els.pointMinutes, "El valor debe ser menor a 60.");
+  if (!Number.isFinite(seconds)) return rejectPointValue(els.pointSeconds, "Ingrese un valor válido.");
+  if (seconds < 0) return rejectPointValue(els.pointSeconds, "El valor debe ser mayor o igual a 0.");
+  if (seconds >= 60) return rejectPointValue(els.pointSeconds, "El valor debe ser menor a 60.");
   if (degrees === 360 && (minutes !== 0 || seconds !== 0)) return showToast("Con 360 grados, minutos y segundos deben ser 0.", true);
-  if (!Number.isFinite(distance) || distance <= 0) return showToast("La distancia debe ser mayor que 0.", true);
+  if (!Number.isFinite(distance)) return rejectPointValue(els.pointDistance, "Ingrese un valor válido.");
+  if (distance < 0) return rejectPointValue(els.pointDistance, "El valor debe ser mayor o igual a 0.");
   const reusableIndex = editingPointIndex === null
     ? state.observations.findIndex((observation) =>
         observation.zoneId === els.pointZone.value && !hasMeasurementData(observation) && Number(observation.id) === Number(id)
@@ -928,7 +946,8 @@ function wireRowActions(row, index) {
   edit.setAttribute("aria-label", "Editar punto");
   edit.addEventListener("click", () => openPointDialog(index));
   row.querySelector(".row-actions").insertBefore(edit, row.querySelector('[data-action="delete"]'));
-  row.querySelector('[data-action="delete"]').addEventListener("click", () => {
+  const clear = row.querySelector('[data-action="delete"]');
+  clear.addEventListener("click", () => {
     pushHistory();
     state.observations[index] = {
       ...defaultObservation(observation.id || nextPointNumber(observation.zoneId), observation.zoneId),
@@ -938,6 +957,14 @@ function wireRowActions(row, index) {
     update(true);
     showToast("Se limpiaron los valores del punto. Puede recuperarlos con Deshacer.");
   });
+  const permanentDelete = document.createElement("button");
+  permanentDelete.type = "button";
+  permanentDelete.className = "delete-button";
+  permanentDelete.textContent = "⌫";
+  permanentDelete.title = "Eliminar punto definitivamente";
+  permanentDelete.setAttribute("aria-label", "Eliminar punto definitivamente");
+  permanentDelete.addEventListener("click", () => deleteObservation(index));
+  row.querySelector(".row-actions").appendChild(permanentDelete);
 }
 
 function moveObservation(index, direction) {
@@ -953,6 +980,40 @@ function moveObservation(index, direction) {
   renumberZone(zoneId);
   update(true);
   showToast("Puntos reordenados y numeración actualizada.");
+}
+
+function sortObservations() {
+  if (state.observations.length < 2) return;
+  const zoneOrder = new Map(state.zones.map((zone, index) => [zone.id, index]));
+  pushHistory();
+  state.observations = state.observations
+    .map((observation, index) => ({ observation, index }))
+    .sort((left, right) => {
+      const zoneDifference = (zoneOrder.get(left.observation.zoneId) ?? 0) - (zoneOrder.get(right.observation.zoneId) ?? 0);
+      if (zoneDifference) return zoneDifference;
+      const numberDifference = Number(left.observation.id || 0) - Number(right.observation.id || 0);
+      return numberDifference || left.index - right.index;
+    })
+    .map(({ observation }) => observation);
+  update(true);
+  showToast("Los puntos se ordenaron por zona y número.");
+}
+
+function deleteObservation(index) {
+  const observation = state.observations[index];
+  if (!observation) return;
+  const zone = state.zones.find((item) => item.id === observation.zoneId);
+  const label = observation.id || index + 1;
+  if (!window.confirm(`¿Eliminar definitivamente el punto ${label}${zone ? ` de "${zone.name}"` : ""}?`)) return;
+  pushHistory();
+  state.observations.splice(index, 1);
+  renumberZone(observation.zoneId);
+  if (zone?.type === "polygon") zone.closed = true;
+  if (selectedPointUid === observation.uid) selectedPointUid = null;
+  update(true);
+  showToast(zone?.type === "polygon"
+    ? "Punto eliminado definitivamente. El polígono se volvió a cerrar con los puntos restantes."
+    : "Punto eliminado definitivamente.");
 }
 
 function applyRowOutputs(row, survey, index) {
@@ -1344,9 +1405,9 @@ function saveZoneFromDialog() {
   if (editingZoneId) {
     const index = state.zones.findIndex((zone) => zone.id === editingZoneId);
     const previous = state.zones[index];
-    state.zones[index] = createZone({ ...previous, ...values, id: previous.id, closed: values.type === "polygon" ? previous.closed : false });
+    state.zones[index] = createZone({ ...previous, ...values, id: previous.id });
   } else {
-    const zone = createZone({ ...values, closed: values.type === "polygon" && state.autoClosePolygons });
+    const zone = createZone(values);
     state.zones.push(zone);
     state.activeZoneId = zone.id;
   }
@@ -1470,7 +1531,7 @@ function drawPlot(survey) {
   const colors = plotColors();
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, width, height);
-  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height);
+  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors);
 
   state.zones.forEach((zone) => {
     if (!zone.visible) return;
@@ -1485,16 +1546,17 @@ function drawPlot(survey) {
         state.showPointNumbers ? point.id : "",
         displayColor,
         false,
-        point.uid === selectedPointUid
+        point.uid === selectedPointUid,
+        colors
       ));
     }
-    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y);
+    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
   });
 
   drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH);
-  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true);
-  drawStationCoords(ctx, x(station.east), y(station.north), station);
-  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin);
+  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true, false, colors);
+  drawStationCoords(ctx, x(station.east), y(station.north), station, colors);
+  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin, colors);
 
   ctx.fillStyle = colors.text;
   ctx.font = "700 12px Segoe UI, Arial";
@@ -1502,7 +1564,14 @@ function drawPlot(survey) {
   ctx.fillText("Norte (N)", margin.left, 16);
 }
 
-function plotColors() {
+function plotColors(forceWhite = false) {
+  if (forceWhite) {
+    return {
+      background: "#ffffff", grid: "rgba(67, 105, 120, 0.2)", muted: "#536973", axis: "#718690",
+      text: "#263840", pointStroke: "#ffffff", labelBackground: "rgba(255, 255, 255, 0.94)",
+      legendBackground: "rgba(255, 255, 255, 0.96)", legendText: "#263840",
+    };
+  }
   return state.appearance === "light"
     ? {
         background: "#f7fafb", grid: "rgba(67, 105, 120, 0.2)", muted: "#536973", axis: "#718690",
@@ -1516,8 +1585,7 @@ function plotColors() {
       };
 }
 
-function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height) {
-  const colors = plotColors();
+function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors = plotColors()) {
   if (state.showGrid) {
     ctx.strokeStyle = colors.grid;
     ctx.fillStyle = colors.muted;
@@ -1574,8 +1642,7 @@ function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
   ctx.restore();
 }
 
-function drawPoint(ctx, x, y, label, color, station = false, selected = false) {
-  const colors = plotColors();
+function drawPoint(ctx, x, y, label, color, station = false, selected = false, colors = plotColors()) {
   if (selected) {
     ctx.strokeStyle = "#f2c94c";
     ctx.lineWidth = 3;
@@ -1609,13 +1676,13 @@ function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
   ctx.restore();
 }
 
-function drawStationCoords(ctx, x, y, station) {
-  ctx.fillStyle = plotColors().text;
+function drawStationCoords(ctx, x, y, station, colors = plotColors()) {
+  ctx.fillStyle = colors.text;
   ctx.font = "700 11px Segoe UI, Arial";
   ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 9, y + 13);
 }
 
-function drawZoneName(ctx, analysis, zone, x, y) {
+function drawZoneName(ctx, analysis, zone, x, y, colors = plotColors()) {
   const center = analysis.points.reduce(
     (sum, point) => ({ east: sum.east + point.east, north: sum.north + point.north }),
     { east: 0, north: 0 }
@@ -1628,14 +1695,14 @@ function drawZoneName(ctx, analysis, zone, x, y) {
   const width = ctx.measureText(label).width + 12;
   const px = x(center.east) - width / 2;
   const py = y(center.north) - 10;
-  ctx.fillStyle = plotColors().labelBackground;
+  ctx.fillStyle = colors.labelBackground;
   ctx.fillRect(px, py, width, 20);
   ctx.fillStyle = zone.color;
   ctx.fillText(label, px + 6, py + 14);
   ctx.restore();
 }
 
-function drawLegend(ctx, zones, survey, width, margin) {
+function drawLegend(ctx, zones, survey, width, margin, colors = plotColors()) {
   if (!zones.length) return;
   const maxItems = Math.min(zones.length, 7);
   const boxWidth = Math.min(185, width * 0.42);
@@ -1643,7 +1710,7 @@ function drawLegend(ctx, zones, survey, width, margin) {
   const left = width - margin.right - boxWidth;
   const top = margin.top + 4;
   ctx.save();
-  ctx.fillStyle = plotColors().legendBackground;
+  ctx.fillStyle = colors.legendBackground;
   ctx.strokeStyle = "rgba(143, 164, 174, 0.5)";
   ctx.lineWidth = 1;
   ctx.fillRect(left, top, boxWidth, boxHeight);
@@ -1655,7 +1722,7 @@ function drawLegend(ctx, zones, survey, width, margin) {
     const y = top + 18 + index * 22;
     ctx.fillStyle = color;
     ctx.fillRect(left + 9, y - 9, 11, 11);
-    ctx.fillStyle = plotColors().legendText;
+    ctx.fillStyle = colors.legendText;
     const label = zone.name.length > 22 ? `${zone.name.slice(0, 20)}...` : zone.name;
     ctx.fillText(label, left + 27, y);
   });
@@ -1784,10 +1851,10 @@ function createTechnicalPlanCanvas(survey) {
   ({ eastAxis, northAxis } = balancedAxes(eastAxis, northAxis, plotW, plotH, station));
   const x = (east) => margin.left + ((east - eastAxis.min) / (eastAxis.max - eastAxis.min)) * plotW;
   const y = (north) => margin.top + (1 - (north - northAxis.min) / (northAxis.max - northAxis.min)) * plotH;
-  const colors = plotColors();
+  const colors = plotColors(true);
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, width, height);
-  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height);
+  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors);
 
   state.zones.forEach((zone) => {
     if (!zone.visible) return;
@@ -1800,15 +1867,18 @@ function createTechnicalPlanCanvas(survey) {
         x(point.east),
         y(point.north),
         state.showPointNumbers ? point.id : "",
-        displayColor
+        displayColor,
+        false,
+        false,
+        colors
       ));
     }
-    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y);
+    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
   });
   drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH);
-  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true);
-  drawStationCoords(ctx, x(station.east), y(station.north), station);
-  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin);
+  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true, false, colors);
+  drawStationCoords(ctx, x(station.east), y(station.north), station, colors);
+  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin, colors);
   ctx.fillStyle = colors.text;
   ctx.font = "700 18px Segoe UI, Arial";
   ctx.fillText("Este (E)", margin.left + plotW - 80, height - 18);
@@ -1824,7 +1894,6 @@ function syncControls() {
   els.showGrid.checked = state.showGrid;
   els.showZoneNames.checked = state.showZoneNames;
   els.showPointNumbers.checked = state.showPointNumbers;
-  els.autoClosePolygons.checked = state.autoClosePolygons;
   els.units.value = state.units;
   els.gridSize.value = String(state.gridSize);
   els.appearance.value = state.appearance;
@@ -2151,11 +2220,11 @@ function exportCoordinatesTxt() {
     index + 1,
     formatNumber(point.east),
     formatNumber(point.north),
+    0,
     state.zones.find((zone) => zone.id === point.zoneId)?.name || "",
-    state.zones.find((zone) => zone.id === point.zoneId)?.description || "",
   ]);
   const content = rows.map((row) => row.map(protectValue).join(", ")).join("\r\n");
-  downloadFile(`\ufeff${content}`, `GeoTrazo_${safeFileName(state.projectName)}-coordenadas.txt`, "text/plain;charset=utf-8");
+  downloadFile(`\ufeff${content}`, `TOPORAY_${safeFileName(state.projectName)}-coordenadas.txt`, "text/plain;charset=utf-8");
 }
 
 function exportCalculationProcess() {
@@ -2193,7 +2262,7 @@ function exportCalculationProcess() {
     lines.push(`Estado de la figura: ${analysis.status}`);
     lines.push("");
   });
-  downloadFile(lines.join("\n"), `GeoTrazo_${safeFileName(state.projectName)}-calculos.txt`, "text/plain;charset=utf-8");
+  downloadFile(lines.join("\n"), `TOPORAY_${safeFileName(state.projectName)}-calculos.txt`, "text/plain;charset=utf-8");
 }
 
 function csvEscape(value) {
@@ -2217,7 +2286,7 @@ function exportCsv() {
     ];
   });
   const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
-  downloadFile(`\ufeff${csv}`, `GeoTrazo_${safeFileName(state.projectName)}.csv`, "text/csv;charset=utf-8");
+  downloadFile(`\ufeff${csv}`, `TOPORAY_${safeFileName(state.projectName)}.csv`, "text/csv;charset=utf-8");
 }
 
 function normalizeHeader(value) {
@@ -2323,7 +2392,7 @@ function exportGraphImage() {
   const technicalCanvas = createTechnicalPlanCanvas(survey);
   technicalCanvas.toBlob((blob) => {
     if (!blob) return;
-    downloadFile(blob, `GeoTrazo_${safeFileName(state.projectName)}-grafica.png`, "image/png");
+    downloadFile(blob, `TOPORAY_${safeFileName(state.projectName)}-grafica.png`, "image/png");
   }, "image/png");
 }
 
@@ -2408,9 +2477,9 @@ function printReport() {
     showToast("El navegador bloqueó la ventana de impresión. Permita las ventanas emergentes e inténtelo de nuevo.", true);
     return;
   }
-  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe_TopoRay_${escapeHtml(safeFileName(state.projectName))}</title><style>
+  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe_TOPORAY_${escapeHtml(safeFileName(state.projectName))}</title><style>
     @page{size:letter landscape;margin:0}
-    *{box-sizing:border-box}html,body{width:11in;height:8.5in;margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#182126}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:17px;margin:0 0 2px}p{margin:2px 0;color:#5d6d76}.general-data{margin-bottom:6px;font-size:7.5px;white-space:nowrap}.layout{display:grid;grid-template-columns:49% 51%;height:2.68in;gap:12px;align-items:start;margin-bottom:6px}.plan-image{display:block;width:100%;height:2.62in;border:1px solid #cbd6da;object-fit:contain;background:#0b1115}h2{font-size:11px;margin:0 0 4px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed}.zone-table{font-size:7px}.main-table{font-size:5.35px}.zone-table th,.zone-table td{border:1px solid #cbd6da;padding:3px;text-align:left}.zone-table th{background:#eaf1ef}.main-table th,.main-table td{border:.5px solid #111;padding:1px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;line-height:1.05}.main-table thead th{font-weight:700;background:#fff}.main-table thead tr:first-child th{font-size:5.7px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:10px}.table-title{margin-top:2px}.report-total{margin:4px 7% 0 0;text-align:right;font-size:7px;font-weight:700}@media screen{html,body{width:auto;height:auto;min-height:100%;background:#dfe5e7}body{padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{padding:0}.report-page{margin:0;break-after:page}}
+    *{box-sizing:border-box}html,body{width:11in;height:8.5in;margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:17px;margin:0 0 2px}p{margin:2px 0;color:#46545b}.general-data{margin-bottom:5px;font-size:7.3px;white-space:nowrap}.layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);height:2.68in;gap:10px;align-items:start;margin-bottom:4px}.layout>div{min-width:0}.plan-image{display:block;width:100%;height:2.62in;border:1px solid #111;object-fit:contain;background:#fff}h2{font-size:11px;margin:0 0 3px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:7.2px}.main-table{font-size:5.8px}.zone-table th,.zone-table td{border:1px solid #111;padding:2px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;line-height:1.05;background:#fff}.zone-table th{font-weight:700}.main-table th,.main-table td{border:.5px solid #111;padding:.6px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;line-height:1;background:#fff;color:#111}.main-table thead th{font-weight:700}.main-table thead tr:first-child th{font-size:6px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:8px}.table-title{margin-top:0}.report-total{margin:3px 7% 0 0;text-align:right;font-size:7px;font-weight:700}@media screen{html,body{width:auto;height:auto;min-height:100%;background:#dfe5e7}body{padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{padding:0}.report-page{margin:0;break-after:page}}
   </style></head><body><button class="print-command" onclick="window.print()">Imprimir o guardar como PDF</button>
     <main class="report-page">
       <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
@@ -2628,11 +2697,6 @@ els.showPointNumbers.addEventListener("change", () => {
   state.showPointNumbers = els.showPointNumbers.checked;
   update(false);
 });
-els.autoClosePolygons.addEventListener("change", () => {
-  pushHistory();
-  state.autoClosePolygons = els.autoClosePolygons.checked;
-  update(false);
-});
 els.activeZone.addEventListener("change", () => setActiveZone(els.activeZone.value));
 els.activeZoneName.addEventListener("focus", rememberInputState);
 els.activeZoneName.addEventListener("input", () => {
@@ -2670,7 +2734,7 @@ els.activeZoneType.addEventListener("change", () => {
   const previousType = zone.type;
   zone.type = els.activeZoneType.value;
   if (zone.type !== "polygon") zone.closed = false;
-  if (zone.type === "polygon" && previousType !== "polygon") zone.closed = state.autoClosePolygons;
+  if (zone.type === "polygon" && previousType !== "polygon") zone.closed = true;
   update(true);
 });
 els.addRow.addEventListener("click", () => {
@@ -2680,6 +2744,7 @@ els.addRow.addEventListener("click", () => {
   }
   openPointDialog();
 });
+els.sortPoints.addEventListener("click", sortObservations);
 els.quickAddPoint.addEventListener("click", () => openPointDialog());
 els.cancelPoint.addEventListener("click", () => els.pointDialog.close());
 els.dismissPoint.addEventListener("click", () => els.pointDialog.close());
@@ -2691,6 +2756,7 @@ els.pointNumber.addEventListener("input", () => {
   els.pointNumber.value = els.pointNumber.value.replace(/[^0-9]/g, "");
 });
 els.pointDegrees.addEventListener("input", () => {
+  clearPointValidity();
   if (Number(els.pointDegrees.value) === 360) {
     els.pointMinutes.value = "0";
     els.pointSeconds.value = "0";
@@ -2699,6 +2765,9 @@ els.pointDegrees.addEventListener("input", () => {
   els.pointMinutes.disabled = locked;
   els.pointSeconds.disabled = locked;
 });
+els.pointMinutes.addEventListener("input", clearPointValidity);
+els.pointSeconds.addEventListener("input", clearPointValidity);
+els.pointDistance.addEventListener("input", clearPointValidity);
 els.pointZone.addEventListener("change", () => {
   if (editingPointIndex === null) els.pointNumber.value = String(nextPointNumber(els.pointZone.value));
 });

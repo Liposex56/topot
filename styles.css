@@ -187,7 +187,7 @@ body[data-theme="light"] .app-sidebar {
 body[data-theme="light"] .brand-symbol,
 body[data-theme="light"] .topbar-brand-symbol,
 body[data-theme="light"] .dialog-brand-symbol {
-  content: url("./assets/geotrazo-symbol.svg");
+  content: url("./assets/toporay-symbol.svg");
 }
 
 .sidebar-nav {
@@ -424,6 +424,12 @@ input[type="checkbox"] {
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 14px;
+}
+
+.view-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .plan-layout {
@@ -676,6 +682,23 @@ table {
   background: var(--bg-deep);
 }
 
+.table-wrap > table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.table-wrap th:nth-child(n + 3):nth-child(-n + 6),
+.table-wrap td:nth-child(n + 3):nth-child(-n + 6) {
+  width: 128px;
+  min-width: 128px;
+  max-width: 128px;
+}
+
+.table-wrap td:nth-child(n + 3):nth-child(-n + 6) input {
+  width: 100%;
+  min-width: 0;
+}
+
 th,
 td {
   padding: 9px 10px;
@@ -721,6 +744,22 @@ td:nth-child(2) {
 th:first-child,
 th:nth-child(2) {
   z-index: 6;
+  background: var(--panel-soft);
+}
+
+.table-wrap th:last-child,
+.table-wrap td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  width: 200px;
+  min-width: 200px;
+  background: var(--panel);
+  box-shadow: -5px 0 8px rgba(0, 0, 0, 0.2);
+}
+
+.table-wrap th:last-child {
+  z-index: 7;
   background: var(--panel-soft);
 }
 
@@ -1429,6 +1468,14 @@ td select {
 
   .view-heading > button {
     width: 100%;
+  }
+
+  .view-heading-actions {
+    width: 100%;
+  }
+
+  .view-heading-actions button {
+    flex: 1 1 0;
   }
 
   .canvas-wrap {
