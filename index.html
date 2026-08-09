@@ -19,26 +19,29 @@
         </div>
 
         <nav class="sidebar-nav">
-          <button class="nav-button is-active" type="button" data-view="plan" title="Plano">
-            <span class="nav-icon" aria-hidden="true">▧</span><span class="sidebar-label">Plano</span>
-          </button>
-          <button class="nav-button" type="button" data-view="points" title="Puntos">
-            <span class="nav-icon" aria-hidden="true">•</span><span class="sidebar-label">Puntos</span>
+          <button class="nav-button" type="button" data-view="projects" title="Proyectos">
+            <span class="nav-icon" aria-hidden="true">□</span><span class="sidebar-label">Proyectos</span>
           </button>
           <button class="nav-button" type="button" data-view="zones" title="Zonas">
             <span class="nav-icon" aria-hidden="true">◇</span><span class="sidebar-label">Zonas</span>
           </button>
+          <button class="nav-button" type="button" data-view="points" title="Puntos">
+            <span class="nav-icon" aria-hidden="true">•</span><span class="sidebar-label">Puntos</span>
+          </button>
+          <button class="nav-button is-active" type="button" data-view="plan" title="Plano">
+            <span class="nav-icon" aria-hidden="true">▧</span><span class="sidebar-label">Plano</span>
+          </button>
           <button class="nav-button" type="button" data-view="calculations" title="Cálculos">
             <span class="nav-icon" aria-hidden="true">ƒ</span><span class="sidebar-label">Cálculos</span>
-          </button>
-          <button class="nav-button" type="button" data-view="projects" title="Proyectos">
-            <span class="nav-icon" aria-hidden="true">□</span><span class="sidebar-label">Proyectos</span>
           </button>
           <button class="nav-button" type="button" data-view="files" title="Importar y exportar">
             <span class="nav-icon" aria-hidden="true">⇅</span><span class="sidebar-label">Importar y exportar</span>
           </button>
           <button class="nav-button" type="button" data-view="settings" title="Configuración">
             <span class="nav-icon" aria-hidden="true">⚙</span><span class="sidebar-label">Configuración</span>
+          </button>
+          <button class="nav-button" type="button" data-view="credits" title="Créditos">
+            <span class="nav-icon" aria-hidden="true">i</span><span class="sidebar-label">Créditos</span>
           </button>
         </nav>
 
@@ -96,7 +99,7 @@
                 <button id="quickAddPointBtn" type="button" title="Agregar un punto"><span aria-hidden="true">＋</span><span>Agregar</span></button>
                 <button id="quickSelectPointBtn" type="button" title="Seleccionar un punto en el plano"><span aria-hidden="true">⌖</span><span>Seleccionar</span></button>
                 <button id="quickMovePointBtn" type="button" title="Editar el punto seleccionado"><span aria-hidden="true">↔</span><span>Mover</span></button>
-                <button id="quickClearPointBtn" type="button" title="Limpiar los valores del punto seleccionado"><span aria-hidden="true">×</span><span>Limpiar</span></button>
+                <button id="quickClearPointBtn" type="button" title="Eliminar definitivamente el punto seleccionado y unir los restantes"><span aria-hidden="true">×</span><span>Limpiar</span></button>
                 <button id="quickMeasureBtn" type="button" title="Medir distancia entre dos puntos"><span aria-hidden="true">⌁</span><span>Medir</span></button>
                 <button id="quickPointsBtn" type="button" title="Mostrar u ocultar los puntos"><span aria-hidden="true">●</span><span>Ocultar puntos</span></button>
                 <button id="quickLinesBtn" type="button" title="Mostrar u ocultar las líneas"><span aria-hidden="true">⌁</span><span>Ocultar líneas</span></button>
@@ -202,8 +205,22 @@
                 <p class="section-kicker">Almacenamiento local</p>
                 <h1 id="projectsTitle">Proyectos</h1>
               </div>
-              <button id="newProjectBtn" class="primary-button" type="button">＋ Crear levantamiento</button>
+              <div class="view-heading-actions">
+                <a class="button-link" href="./output/pdf/Manual_de_usuario_TOPORAY_v1.0.pdf" target="_blank" rel="noopener">Ayuda</a>
+                <button id="newProjectBtn" class="primary-button" type="button">＋ Crear levantamiento</button>
+              </div>
             </div>
+            <section class="project-data-panel" aria-labelledby="projectDataTitle">
+              <h2 id="projectDataTitle">Ingreso de datos</h2>
+              <div class="form-grid project-data-grid">
+                <label><span>Responsable</span><input id="projectResponsible" type="text" autocomplete="name" /></label>
+                <label><span>Fecha del levantamiento</span><input id="projectSurveyDate" type="date" /></label>
+                <label><span>Revisor</span><input id="projectReviewer" type="text" autocomplete="name" /></label>
+                <label><span>Fecha de impresión</span><input id="projectPrintDate" type="date" /></label>
+                <label><span>Coordenada Este inicial</span><input id="projectStationEast" type="number" step="0.001" inputmode="decimal" /></label>
+                <label><span>Coordenada Norte inicial</span><input id="projectStationNorth" type="number" step="0.001" inputmode="decimal" /></label>
+              </div>
+            </section>
             <div class="project-command-bar">
               <label><span>Levantamientos guardados</span><select id="projectList" aria-label="Levantamientos guardados"></select></label>
               <button id="openProjectBtn" type="button">Abrir</button>
@@ -236,7 +253,6 @@
                 <p class="section-kicker">Preferencias</p>
                 <h1 id="settingsTitle">Configuración</h1>
               </div>
-              <button id="sampleBtn" type="button">Cargar ejemplo</button>
             </div>
             <div class="settings-grid">
               <section class="settings-section">
@@ -258,10 +274,14 @@
               <section class="settings-section drawing-scale-panel" aria-labelledby="drawingScaleTitle">
                 <h2 id="drawingScaleTitle">Escala de dibujo</h2>
                 <div class="drawing-scale-controls">
-                  <label>Formato de papel<select id="paperFormatSelect"><option value="A0">A0</option><option value="A1">A1</option><option value="A2">A2</option><option value="A3">A3</option><option value="A4">A4</option></select></label>
+                  <label>Formato de papel<select id="paperFormatSelect"><option value="A0">A0</option><option value="A1">A1</option><option value="A2">A2</option><option value="A3">A3</option><option value="A4">A4</option><option value="CUSTOM">Personalizado</option></select></label>
                   <label>Orientación<select id="paperOrientationSelect"><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
                   <label>Modo<select id="drawingScaleModeSelect"><option value="auto">Automática</option><option value="manual">Manual</option></select></label>
                   <label>Escala seleccionada<select id="drawingScaleSelect"><option value="50">1:50</option><option value="100">1:100</option><option value="200">1:200</option><option value="250">1:250</option><option value="500">1:500</option><option value="1000">1:1000</option><option value="2000">1:2000</option><option value="2500">1:2500</option><option value="5000">1:5000</option><option value="10000">1:10000</option></select></label>
+                  <div id="customPaperFields" class="custom-paper-fields is-hidden">
+                    <label>Ancho (mm)<input id="customPaperWidth" type="number" min="50" max="5000" step="1" inputmode="decimal" /></label>
+                    <label>Alto (mm)<input id="customPaperHeight" type="number" min="50" max="5000" step="1" inputmode="decimal" /></label>
+                  </div>
                 </div>
                 <div id="drawingScaleInfo" class="drawing-scale-info" aria-live="polite"></div>
               </section>
@@ -275,6 +295,21 @@
                 </div>
               </section>
             </div>
+          </section>
+
+          <section id="view-credits" class="app-view" data-view-panel="credits" aria-labelledby="creditsTitle">
+            <div class="view-heading">
+              <div>
+                <p class="section-kicker">Información institucional</p>
+                <h1 id="creditsTitle">Créditos</h1>
+              </div>
+            </div>
+            <div class="credits-grid">
+              <article class="credit-item" data-credit-index="0"><h2>Autor 1</h2><label><span>Nombre completo</span><input data-credit-field="name" type="text" /></label><label><span>Título</span><input data-credit-field="title" type="text" /></label><label><span>Afiliación</span><input data-credit-field="affiliation" type="text" /></label></article>
+              <article class="credit-item" data-credit-index="1"><h2>Autor 2</h2><label><span>Nombre completo</span><input data-credit-field="name" type="text" /></label><label><span>Título</span><input data-credit-field="title" type="text" /></label><label><span>Afiliación</span><input data-credit-field="affiliation" type="text" /></label></article>
+              <article class="credit-item" data-credit-index="2"><h2>Autor 3</h2><label><span>Nombre completo</span><input data-credit-field="name" type="text" /></label><label><span>Título</span><input data-credit-field="title" type="text" /></label><label><span>Afiliación</span><input data-credit-field="affiliation" type="text" /></label></article>
+            </div>
+            <p class="credits-note">Los datos se guardan automáticamente en este navegador.</p>
           </section>
         </main>
       </div>
@@ -295,6 +330,10 @@
         </div>
         <div class="form-grid">
           <label class="wide-field"><span>Nombre del levantamiento</span><input id="newProjectName" type="text" required /></label>
+          <label><span>Responsable</span><input id="newProjectResponsible" type="text" /></label>
+          <label><span>Fecha del levantamiento</span><input id="newProjectSurveyDate" type="date" /></label>
+          <label><span>Revisor</span><input id="newProjectReviewer" type="text" /></label>
+          <label><span>Fecha de impresión</span><input id="newProjectPrintDate" type="date" /></label>
           <label><span>Coordenada Este inicial</span><input id="newProjectEast" type="number" step="0.001" inputmode="decimal" required /></label>
           <label><span>Coordenada Norte inicial</span><input id="newProjectNorth" type="number" step="0.001" inputmode="decimal" required /></label>
         </div>
@@ -348,16 +387,16 @@
 
     <template id="rowTemplate">
       <tr>
-        <td data-column="zone"><select data-field="zoneId" class="zone-cell-select" aria-label="Zona del punto"></select></td>
-        <td data-column="point"><input data-field="id" class="compact point-number-input" type="text" inputmode="numeric" autocomplete="off" /><small class="field-error" data-error="id"></small></td>
-        <td><input data-field="degrees" class="compact" type="number" step="1" min="0" max="360" /></td>
-        <td><input data-field="minutes" class="compact" type="number" step="1" min="0" max="59" /><small class="field-error" data-error="minutes"></small></td>
-        <td><input data-field="seconds" class="compact" type="number" step="0.001" min="0" max="59.999" /><small class="field-error" data-error="seconds"></small></td>
-        <td><input data-field="distance" class="compact" type="number" step="0.001" min="0" /></td>
-        <td><input data-field="description" class="description-input" type="text" /></td>
-        <td data-output="east">-</td><td data-output="north">-</td>
-        <td><span class="point-status" data-output="status">Incompleto</span></td>
-        <td><div class="row-actions"><button data-action="up" type="button" title="Subir punto" aria-label="Subir punto">↑</button><button data-action="down" type="button" title="Bajar punto" aria-label="Bajar punto">↓</button><button data-action="delete" class="delete-button" type="button" title="Limpiar valores" aria-label="Limpiar valores del punto">×</button></div></td>
+        <td data-column="zone" data-label="Zona"><select data-field="zoneId" class="zone-cell-select" aria-label="Zona del punto"></select></td>
+        <td data-column="point" data-label="Número del punto"><input data-field="id" class="compact point-number-input" type="text" inputmode="numeric" autocomplete="off" /><small class="field-error" data-error="id"></small></td>
+        <td data-label="Grados"><input data-field="degrees" class="compact" type="number" step="1" min="0" max="360" /></td>
+        <td data-label="Minutos"><input data-field="minutes" class="compact" type="number" step="1" min="0" max="59" /><small class="field-error" data-error="minutes"></small></td>
+        <td data-label="Segundos"><input data-field="seconds" class="compact" type="number" step="0.001" min="0" max="59.999" /><small class="field-error" data-error="seconds"></small></td>
+        <td data-label="Distancia"><input data-field="distance" class="compact" type="number" step="0.001" min="0" /></td>
+        <td data-label="Descripción"><input data-field="description" class="description-input" type="text" /></td>
+        <td data-label="Coordenada Este" data-output="east">-</td><td data-label="Coordenada Norte" data-output="north">-</td>
+        <td data-label="Estado"><span class="point-status" data-output="status">Incompleto</span></td>
+        <td data-label="Acciones"><div class="row-actions"><button data-action="up" type="button" title="Subir punto" aria-label="Subir punto">↑</button><button data-action="down" type="button" title="Bajar punto" aria-label="Bajar punto">↓</button><button data-action="delete" class="delete-button" type="button" title="Limpiar valores" aria-label="Limpiar valores del punto">×</button></div></td>
       </tr>
     </template>
 

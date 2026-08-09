@@ -1,6 +1,7 @@
 const STORAGE_KEY = "levantamientos-topograficos-v1";
 const PROJECTS_KEY = "levantamientos-topograficos-projects-v1";
 const CURRENT_PROJECT_KEY = "levantamientos-topograficos-current-project-v1";
+const CREDITS_KEY = "levantamientos-topograficos-credits-v1";
 const HISTORY_LIMIT = 60;
 const ZONE_COLORS = ["#0b6b5d", "#2962a3", "#d36b22", "#6d7378", "#8a4f9e", "#b13f4b"];
 const PAPER_FORMATS = {
@@ -29,7 +30,6 @@ const els = {
   center: document.querySelector("#centerBtn"),
   zoomIn: document.querySelector("#zoomInBtn"),
   zoomOut: document.querySelector("#zoomOutBtn"),
-  sample: document.querySelector("#sampleBtn"),
   exportCsv: document.querySelector("#exportBtn"),
   exportProcess: document.querySelector("#exportProcessBtn"),
   exportTxt: document.querySelector("#exportTxtBtn"),
@@ -79,6 +79,9 @@ const els = {
   drawingScaleMode: document.querySelector("#drawingScaleModeSelect"),
   drawingScale: document.querySelector("#drawingScaleSelect"),
   drawingScaleInfo: document.querySelector("#drawingScaleInfo"),
+  customPaperFields: document.querySelector("#customPaperFields"),
+  customPaperWidth: document.querySelector("#customPaperWidth"),
+  customPaperHeight: document.querySelector("#customPaperHeight"),
   distanceHeader: document.querySelector("#distanceHeader"),
   pointSearch: document.querySelector("#pointSearch"),
   pointZoneFilter: document.querySelector("#pointZoneFilter"),
@@ -91,6 +94,13 @@ const els = {
   calculationsContent: document.querySelector("#calculationsContent"),
   projectsViewList: document.querySelector("#projectsViewList"),
   duplicateProject: document.querySelector("#duplicateProjectBtn"),
+  projectResponsible: document.querySelector("#projectResponsible"),
+  projectSurveyDate: document.querySelector("#projectSurveyDate"),
+  projectReviewer: document.querySelector("#projectReviewer"),
+  projectPrintDate: document.querySelector("#projectPrintDate"),
+  projectStationEast: document.querySelector("#projectStationEast"),
+  projectStationNorth: document.querySelector("#projectStationNorth"),
+  creditItems: [...document.querySelectorAll("[data-credit-index]")],
   units: document.querySelector("#unitsSelect"),
   gridSize: document.querySelector("#gridSizeSelect"),
   appearance: document.querySelector("#appearanceSelect"),
@@ -112,6 +122,10 @@ const els = {
   newProjectDialog: document.querySelector("#newProjectDialog"),
   newProjectForm: document.querySelector("#newProjectForm"),
   newProjectName: document.querySelector("#newProjectName"),
+  newProjectResponsible: document.querySelector("#newProjectResponsible"),
+  newProjectSurveyDate: document.querySelector("#newProjectSurveyDate"),
+  newProjectReviewer: document.querySelector("#newProjectReviewer"),
+  newProjectPrintDate: document.querySelector("#newProjectPrintDate"),
   newProjectEast: document.querySelector("#newProjectEast"),
   newProjectNorth: document.querySelector("#newProjectNorth"),
   cancelNewProject: document.querySelector("#cancelNewProjectBtn"),
@@ -144,6 +158,7 @@ let quickMode = null;
 let measurePointUids = [];
 let plotTransform = null;
 let dragState = null;
+let credits = loadCredits();
 const undoStack = [];
 const redoStack = [];
 
@@ -196,6 +211,7 @@ function createBlankState(projectName = "Levantamiento sin nombre") {
     version: 2,
     projectName,
     modifiedAt: new Date().toISOString(),
+    projectMeta: { responsible: "", surveyDate: "", reviewer: "", printDate: todayIsoDate() },
     station: { east: 1000, north: 1000 },
     mode: "radiacion",
     showPoints: true,
@@ -208,7 +224,7 @@ function createBlankState(projectName = "Levantamiento sin nombre") {
     appearance: "dark",
     axisDecimals: 0,
     view: { zoom: 1, panEast: 0, panNorth: 0 },
-    drawingScale: { paper: "A3", orientation: "horizontal", mode: "auto", denominator: 500 },
+    drawingScale: { paper: "A3", orientation: "horizontal", mode: "auto", denominator: 500, customWidth: 420, customHeight: 297 },
     zones: [mainZone],
     activeZoneId: mainZone.id,
     observations: [defaultObservation(1, mainZone.id)],
@@ -250,6 +266,12 @@ function migrateState(rawState) {
     version: 2,
     projectName: normalizeProjectName(raw.projectName),
     modifiedAt: typeof raw.modifiedAt === "string" ? raw.modifiedAt : fallback.modifiedAt,
+    projectMeta: {
+      responsible: String(raw.projectMeta?.responsible || ""),
+      surveyDate: String(raw.projectMeta?.surveyDate || ""),
+      reviewer: String(raw.projectMeta?.reviewer || ""),
+      printDate: String(raw.projectMeta?.printDate || fallback.projectMeta.printDate),
+    },
     station: {
       east: toNumber(raw.station?.east ?? fallback.station.east),
       north: toNumber(raw.station?.north ?? fallback.station.north),
@@ -270,12 +292,16 @@ function migrateState(rawState) {
       panNorth: toNumber(raw.view?.panNorth),
     },
     drawingScale: {
-      paper: PAPER_FORMATS[raw.drawingScale?.paper] ? raw.drawingScale.paper : fallback.drawingScale.paper,
+      paper: raw.drawingScale?.paper === "CUSTOM" || PAPER_FORMATS[raw.drawingScale?.paper]
+        ? raw.drawingScale.paper
+        : fallback.drawingScale.paper,
       orientation: raw.drawingScale?.orientation === "vertical" ? "vertical" : "horizontal",
       mode: raw.drawingScale?.mode === "manual" ? "manual" : "auto",
       denominator: DRAWING_SCALES.includes(Number(raw.drawingScale?.denominator))
         ? Number(raw.drawingScale.denominator)
         : fallback.drawingScale.denominator,
+      customWidth: clampNumber(raw.drawingScale?.customWidth || fallback.drawingScale.customWidth, 50, 5000),
+      customHeight: clampNumber(raw.drawingScale?.customHeight || fallback.drawingScale.customHeight, 50, 5000),
     },
     zones,
     activeZoneId,
@@ -294,6 +320,42 @@ function clampNumber(value, min, max) {
 
 function normalizeProjectName(name) {
   return String(name || "").trim() || "Levantamiento sin nombre";
+}
+
+function todayIsoDate() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function formatDateValue(value) {
+  if (!value) return "No registrada";
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("es-CO");
+}
+
+function loadCredits() {
+  const fallback = Array.from({ length: 3 }, () => ({ name: "", title: "", affiliation: "" }));
+  try {
+    const stored = JSON.parse(localStorage.getItem(CREDITS_KEY));
+    if (!Array.isArray(stored)) return fallback;
+    return fallback.map((item, index) => ({
+      name: String(stored[index]?.name || item.name),
+      title: String(stored[index]?.title || item.title),
+      affiliation: String(stored[index]?.affiliation || item.affiliation),
+    }));
+  } catch {
+    return fallback;
+  }
+}
+
+function syncCreditControls() {
+  els.creditItems.forEach((item) => {
+    const index = Number(item.dataset.creditIndex);
+    item.querySelectorAll("[data-credit-field]").forEach((input) => {
+      input.value = credits[index]?.[input.dataset.creditField] || "";
+    });
+  });
 }
 
 function normalizeObservation(observation) {
@@ -1590,7 +1652,7 @@ function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, h
     ctx.strokeStyle = colors.grid;
     ctx.fillStyle = colors.muted;
     ctx.lineWidth = 1;
-    ctx.font = "11px Segoe UI, Arial";
+    ctx.font = "12px Segoe UI, Arial";
     eastAxis.ticks.forEach((value) => {
       const px = x(value);
       ctx.beginPath();
@@ -1621,7 +1683,7 @@ function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, h
 function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.lineWidth = analysis.status === "Con errores" ? 3 : 2.4;
+  ctx.lineWidth = analysis.status === "Con errores" ? 2.2 : 1.6;
   if (analysis.status === "Con errores") ctx.setLineDash([8, 5]);
   analysis.segments.forEach((segment) => {
     if (segment.length < 2) return;
@@ -1658,7 +1720,7 @@ function drawPoint(ctx, x, y, label, color, station = false, selected = false, c
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = colors.text;
-  ctx.font = "700 11px Segoe UI, Arial";
+  ctx.font = "700 13px Segoe UI, Arial";
   if (label) ctx.fillText(String(label), x + 8, y - 8);
 }
 
@@ -1678,7 +1740,7 @@ function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
 
 function drawStationCoords(ctx, x, y, station, colors = plotColors()) {
   ctx.fillStyle = colors.text;
-  ctx.font = "700 11px Segoe UI, Arial";
+  ctx.font = "700 13px Segoe UI, Arial";
   ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 9, y + 13);
 }
 
@@ -1691,7 +1753,7 @@ function drawZoneName(ctx, analysis, zone, x, y, colors = plotColors()) {
   center.north /= analysis.points.length;
   const label = zone.name;
   ctx.save();
-  ctx.font = "700 12px Segoe UI, Arial";
+  ctx.font = "700 13px Segoe UI, Arial";
   const width = ctx.measureText(label).width + 12;
   const px = x(center.east) - width / 2;
   const py = y(center.north) - 10;
@@ -1715,7 +1777,7 @@ function drawLegend(ctx, zones, survey, width, margin, colors = plotColors()) {
   ctx.lineWidth = 1;
   ctx.fillRect(left, top, boxWidth, boxHeight);
   ctx.strokeRect(left, top, boxWidth, boxHeight);
-  ctx.font = "700 11px Segoe UI, Arial";
+  ctx.font = "700 12px Segoe UI, Arial";
   zones.slice(0, maxItems).forEach((zone, index) => {
     const analysis = survey.analyses.get(zone.id);
     const color = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
@@ -1755,6 +1817,12 @@ function updateStats(survey) {
 }
 
 function drawingPaperDimensions() {
+  if (state.drawingScale.paper === "CUSTOM") {
+    return {
+      width: clampNumber(state.drawingScale.customWidth, 50, 5000),
+      height: clampNumber(state.drawingScale.customHeight, 50, 5000),
+    };
+  }
   const format = PAPER_FORMATS[state.drawingScale.paper] || PAPER_FORMATS.A3;
   return state.drawingScale.orientation === "horizontal"
     ? { width: format.height, height: format.width }
@@ -1814,15 +1882,23 @@ function renderDrawingScale(survey) {
   if (state.drawingScale.mode === "auto") state.drawingScale.denominator = details.selected;
   els.paperFormat.value = state.drawingScale.paper;
   els.paperOrientation.value = state.drawingScale.orientation;
+  els.paperOrientation.disabled = state.drawingScale.paper === "CUSTOM";
+  els.customPaperFields.classList.toggle("is-hidden", state.drawingScale.paper !== "CUSTOM");
+  els.customPaperWidth.value = String(state.drawingScale.customWidth);
+  els.customPaperHeight.value = String(state.drawingScale.customHeight);
   els.drawingScaleMode.value = state.drawingScale.mode;
   els.drawingScale.value = String(details.selected);
   els.drawingScale.disabled = state.drawingScale.mode === "auto";
-  const orientation = state.drawingScale.orientation;
+  const isCustom = state.drawingScale.paper === "CUSTOM";
+  const paperName = isCustom ? "Personalizado" : state.drawingScale.paper;
+  const orientation = isCustom ? "" : state.drawingScale.orientation;
+  const paperDescription = `${paperName}${orientation ? ` ${orientation}` : ""}`;
   const fitMessage = details.fits
-    ? `El terreno cabe correctamente en ${state.drawingScale.paper} ${orientation} a escala 1:${details.selected}.`
-    : `El terreno no cabe completamente en ${state.drawingScale.paper} ${orientation} a escala 1:${details.selected}. Seleccione una hoja más grande o una escala con mayor denominador.`;
+    ? `El terreno cabe correctamente en ${paperDescription} a escala 1:${details.selected}.`
+    : `El terreno no cabe completamente en ${paperDescription} a escala 1:${details.selected}. Seleccione una hoja más grande o una escala con mayor denominador.`;
   els.drawingScaleInfo.innerHTML = `
-    <span>Formato: <strong>${state.drawingScale.paper} ${orientation}</strong></span>
+    <span>Formato: <strong>${paperDescription}</strong></span>
+    <span>Papel: <strong>${formatNumber(details.paper.width, 0)} mm × ${formatNumber(details.paper.height, 0)} mm</strong></span>
     <span>Terreno: <strong>${formatNumber(details.terrainWidth, 2)} m × ${formatNumber(details.terrainHeight, 2)} m</strong></span>
     <span>Escala recomendada: <strong>1:${details.recommended}</strong></span>
     <span>Escala seleccionada: <strong>1:${details.selected}</strong></span>
@@ -1831,21 +1907,22 @@ function renderDrawingScale(survey) {
     <strong class="drawing-scale-result ${details.fits ? "fits" : "does-not-fit"}">${escapeHtml(fitMessage)}</strong>`;
 }
 
-function createTechnicalPlanCanvas(survey) {
+function createTechnicalPlanCanvas(survey, options = {}) {
   const canvas = document.createElement("canvas");
-  canvas.width = 1400;
-  canvas.height = 1000;
+  canvas.width = 1000;
+  canvas.height = 440;
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
   const station = { east: toNumber(state.station.east), north: toNumber(state.station.north), id: "BM" };
-  const visibleZoneIds = new Set(state.zones.filter((zone) => zone.visible).map((zone) => zone.id));
+  const exportZones = state.zones.filter((zone) => zone.visible && (!options.focusZoneId || zone.id === options.focusZoneId));
+  const visibleZoneIds = new Set(exportZones.map((zone) => zone.id));
   const visiblePoints = survey.points.filter((point) => point.hasCoordinates && visibleZoneIds.has(point.zoneId));
   const eastValues = [station, ...visiblePoints].map((point) => point.east);
   const northValues = [station, ...visiblePoints].map((point) => point.north);
   let eastAxis = niceAxis(Math.min(...eastValues), Math.max(...eastValues), station.east);
   let northAxis = niceAxis(Math.min(...northValues), Math.max(...northValues), station.north);
-  const margin = { left: 90, right: 45, top: 45, bottom: 70 };
+  const margin = { left: 70, right: 30, top: 32, bottom: 55 };
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
   ({ eastAxis, northAxis } = balancedAxes(eastAxis, northAxis, plotW, plotH, station));
@@ -1856,8 +1933,7 @@ function createTechnicalPlanCanvas(survey) {
   ctx.fillRect(0, 0, width, height);
   drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors);
 
-  state.zones.forEach((zone) => {
-    if (!zone.visible) return;
+  exportZones.forEach((zone) => {
     const analysis = survey.analyses.get(zone.id);
     const displayColor = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
     if (state.showLines && zone.type !== "points") drawZoneGeometry(ctx, analysis, zone, displayColor, x, y);
@@ -1878,7 +1954,7 @@ function createTechnicalPlanCanvas(survey) {
   drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH);
   drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true, false, colors);
   drawStationCoords(ctx, x(station.east), y(station.north), station, colors);
-  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin, colors);
+  drawLegend(ctx, exportZones, survey, width, margin, colors);
   ctx.fillStyle = colors.text;
   ctx.font = "700 18px Segoe UI, Arial";
   ctx.fillText("Este (E)", margin.left + plotW - 80, height - 18);
@@ -1890,6 +1966,12 @@ function syncControls() {
   els.projectName.value = state.projectName;
   els.stationEast.value = state.station.east;
   els.stationNorth.value = state.station.north;
+  els.projectResponsible.value = state.projectMeta.responsible;
+  els.projectSurveyDate.value = state.projectMeta.surveyDate;
+  els.projectReviewer.value = state.projectMeta.reviewer;
+  els.projectPrintDate.value = state.projectMeta.printDate;
+  els.projectStationEast.value = state.station.east;
+  els.projectStationNorth.value = state.station.north;
   els.showLines.checked = state.showLines;
   els.showGrid.checked = state.showGrid;
   els.showZoneNames.checked = state.showZoneNames;
@@ -1901,12 +1983,17 @@ function syncControls() {
   els.axisDecimals.value = String(state.axisDecimals);
   els.paperFormat.value = state.drawingScale.paper;
   els.paperOrientation.value = state.drawingScale.orientation;
+  els.paperOrientation.disabled = state.drawingScale.paper === "CUSTOM";
+  els.customPaperFields.classList.toggle("is-hidden", state.drawingScale.paper !== "CUSTOM");
+  els.customPaperWidth.value = String(state.drawingScale.customWidth);
+  els.customPaperHeight.value = String(state.drawingScale.customHeight);
   els.drawingScaleMode.value = state.drawingScale.mode;
   els.drawingScale.value = String(state.drawingScale.denominator);
   els.drawingScale.disabled = state.drawingScale.mode === "auto";
   els.distanceHeader.textContent = `Distancia (${unitSymbol()})`;
   renderProjectList();
   renderProjectsView();
+  syncCreditControls();
   updateUndoButtons();
 }
 
@@ -2185,7 +2272,12 @@ function setSample() {
 }
 
 function safeFileName(name) {
-  return normalizeProjectName(name).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase();
+  return normalizeProjectName(name)
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .toLowerCase();
 }
 
 function downloadFile(content, filename, type) {
@@ -2223,8 +2315,8 @@ function exportCoordinatesTxt() {
     0,
     state.zones.find((zone) => zone.id === point.zoneId)?.name || "",
   ]);
-  const content = rows.map((row) => row.map(protectValue).join(", ")).join("\r\n");
-  downloadFile(`\ufeff${content}`, `TOPORAY_${safeFileName(state.projectName)}-coordenadas.txt`, "text/plain;charset=utf-8");
+  const content = rows.map((row) => row.map(protectValue).join(",")).join("\r\n");
+  downloadFile(`\ufeff${content}`, `TOPORAY_${safeFileName(state.projectName)}_coordenadas.txt`, "text/plain;charset=utf-8");
 }
 
 function exportCalculationProcess() {
@@ -2262,7 +2354,7 @@ function exportCalculationProcess() {
     lines.push(`Estado de la figura: ${analysis.status}`);
     lines.push("");
   });
-  downloadFile(lines.join("\n"), `TOPORAY_${safeFileName(state.projectName)}-calculos.txt`, "text/plain;charset=utf-8");
+  downloadFile(lines.join("\n"), `TOPORAY_${safeFileName(state.projectName)}_calculos.txt`, "text/plain;charset=utf-8");
 }
 
 function csvEscape(value) {
@@ -2392,7 +2484,7 @@ function exportGraphImage() {
   const technicalCanvas = createTechnicalPlanCanvas(survey);
   technicalCanvas.toBlob((blob) => {
     if (!blob) return;
-    downloadFile(blob, `TOPORAY_${safeFileName(state.projectName)}-grafica.png`, "image/png");
+    downloadFile(blob, `TOPORAY_${safeFileName(state.projectName)}_grafica.png`, "image/png");
   }, "image/png");
 }
 
@@ -2440,12 +2532,17 @@ function reportSegments(survey) {
 function printReport() {
   const survey = computeSurvey();
   const scale = drawingScaleDetails(survey);
-  const image = createTechnicalPlanCanvas(survey).toDataURL("image/png");
+  const mainZone = state.zones.find((zone) => zone.type === "polygon") || state.zones[0];
+  const mainAnalysis = mainZone ? survey.analyses.get(mainZone.id) : null;
+  const image = createTechnicalPlanCanvas(survey, { focusZoneId: mainZone?.id }).toDataURL("image/png");
   const templateUrl = new URL("./assets/report-template.png", window.location.href).href;
   const segmentByPoint = reportSegments(survey);
   const validPoints = survey.points.filter((point) => point.hasCoordinates);
-  const totalArea = state.zones.reduce((sum, zone) => sum + survey.analyses.get(zone.id).area, 0);
-  const totalPerimeter = state.zones.reduce((sum, zone) => sum + survey.analyses.get(zone.id).measure, 0);
+  const totalArea = mainAnalysis?.area || 0;
+  const totalPerimeter = mainAnalysis?.measure || 0;
+  const paperName = state.drawingScale.paper === "CUSTOM" ? "Personalizado" : state.drawingScale.paper;
+  const paperOrientation = state.drawingScale.paper === "CUSTOM" ? "" : ` ${state.drawingScale.orientation}`;
+  const paperDimensions = `${formatNumber(scale.paper.width, 0)} × ${formatNumber(scale.paper.height, 0)} mm`;
   const zoneRows = state.zones.map((zone) => {
     const analysis = survey.analyses.get(zone.id);
     return `<tr><td>${escapeHtml(zone.name)}</td><td>${escapeHtml(zoneTypeLabel(zone.type))}</td><td>${analysis.count}</td><td>${formatNumber(analysis.area)}</td><td>${formatNumber(analysis.measure)}</td></tr>`;
@@ -2470,8 +2567,6 @@ function printReport() {
     </tr>`;
   }).join("");
   const initialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="15"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
-  const modifiedDate = new Date(state.modifiedAt);
-  const dateText = Number.isNaN(modifiedDate.getTime()) ? "" : modifiedDate.toLocaleDateString("es-CO");
   const popup = window.open("", "_blank", "width=1100,height=800");
   if (!popup) {
     showToast("El navegador bloqueó la ventana de impresión. Permita las ventanas emergentes e inténtelo de nuevo.", true);
@@ -2479,18 +2574,18 @@ function printReport() {
   }
   popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe_TOPORAY_${escapeHtml(safeFileName(state.projectName))}</title><style>
     @page{size:letter landscape;margin:0}
-    *{box-sizing:border-box}html,body{width:11in;height:8.5in;margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:17px;margin:0 0 2px}p{margin:2px 0;color:#46545b}.general-data{margin-bottom:5px;font-size:7.3px;white-space:nowrap}.layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);height:2.68in;gap:10px;align-items:start;margin-bottom:4px}.layout>div{min-width:0}.plan-image{display:block;width:100%;height:2.62in;border:1px solid #111;object-fit:contain;background:#fff}h2{font-size:11px;margin:0 0 3px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:7.2px}.main-table{font-size:5.8px}.zone-table th,.zone-table td{border:1px solid #111;padding:2px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;line-height:1.05;background:#fff}.zone-table th{font-weight:700}.main-table th,.main-table td{border:.5px solid #111;padding:.6px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;line-height:1;background:#fff;color:#111}.main-table thead th{font-weight:700}.main-table thead tr:first-child th{font-size:6px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:8px}.table-title{margin-top:0}.report-total{margin:3px 7% 0 0;text-align:right;font-size:7px;font-weight:700}@media screen{html,body{width:auto;height:auto;min-height:100%;background:#dfe5e7}body{padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{padding:0}.report-page{margin:0;break-after:page}}
+    *{box-sizing:border-box}html,body{width:11in;height:8.5in;margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:16px;margin:0 0 3px}.project-data{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px 9px;margin-bottom:3px;font-size:7.3px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 4px;font-size:7px;color:#263840;white-space:nowrap}.layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);height:2.42in;gap:8px;align-items:start;margin-bottom:4px}.layout>div{min-width:0}.plan-image{display:block;width:100%;height:2.38in;border:.5px solid #111;object-fit:contain;background:#fff}h2{font-size:10px;margin:0 0 3px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:6.8px}.main-table{font-size:5.8px}.zone-table th,.zone-table td{border:.5px solid #111;padding:2px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;line-height:1.05;background:#fff}.zone-table th{font-weight:700}.main-table th,.main-table td{border:.35px solid #111;padding:.6px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;line-height:1;background:#fff;color:#111}.main-table thead th{font-weight:700}.main-table thead tr:first-child th{font-size:6px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:8px}.table-title{margin-top:0}.report-total{margin:3px 7% 0 0;text-align:right;font-size:7px;font-weight:700}@media screen{html,body{width:auto;height:auto;min-height:100%;background:#dfe5e7}body{padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{padding:0}.report-page{margin:0;break-after:page}}
   </style></head><body><button class="print-command" onclick="window.print()">Imprimir o guardar como PDF</button>
     <main class="report-page">
       <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
       <section class="report-content">
         <h1>${escapeHtml(state.projectName)}</h1>
-        <p>Estación inicial: E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p>
-        <p class="general-data">Fecha: ${escapeHtml(dateText)} · Formato ${state.drawingScale.paper} ${state.drawingScale.orientation} · Escala 1:${scale.selected} · Área total: ${formatNumber(totalArea)} ${areaUnitSymbol()} · Perímetro / longitud: ${formatNumber(totalPerimeter)} ${unitSymbol()}</p>
+        <div class="project-data"><span><strong>Fecha del levantamiento:</strong> ${escapeHtml(formatDateValue(state.projectMeta.surveyDate))}</span><span><strong>Responsable:</strong> ${escapeHtml(state.projectMeta.responsible || "No registrado")}</span><span><strong>Revisor:</strong> ${escapeHtml(state.projectMeta.reviewer || "No registrado")}</span><span><strong>Fecha de impresión:</strong> ${escapeHtml(formatDateValue(state.projectMeta.printDate || todayIsoDate()))}</span></div>
+        <p class="technical-data"><strong>Formato:</strong> ${paperName}${paperOrientation} · <strong>Dimensiones:</strong> ${paperDimensions} · <strong>Escala:</strong> 1:${scale.selected} · <strong>Área principal:</strong> ${formatNumber(totalArea)} ${areaUnitSymbol()} · <strong>Perímetro principal:</strong> ${formatNumber(totalPerimeter)} ${unitSymbol()} · <strong>BM:</strong> E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p>
         <div class="layout"><img class="plan-image" src="${image}" alt="Plano del levantamiento"><div><h2>Resumen por zonas</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows}</tbody></table></div></div>
         <h2 class="table-title">Puntos y resultados</h2>
         <table class="main-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead><tbody>${initialRow}${pointRows || '<tr><td colspan="22">No hay puntos calculados.</td></tr>'}</tbody></table>
-        <div class="report-total">Perímetro / longitud total: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
+        <div class="report-total">Perímetro del terreno principal: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
       </section>
     </main>
   </body></html>`);
@@ -2584,7 +2679,8 @@ function handleCanvasTool(event) {
     quickMode = null;
     openPointDialog(index);
   } else if (quickMode === "clear") {
-    clearPointValues(selectedPointIndex());
+    deleteObservation(selectedPointIndex());
+    quickMode = null;
   } else if (quickMode === "measure") {
     if (!measurePointUids.includes(point.uid)) measurePointUids.push(point.uid);
     if (measurePointUids.length === 2) {
@@ -2603,6 +2699,10 @@ function handleCanvasTool(event) {
 
 function openNewProjectDialog() {
   els.newProjectName.value = "Nuevo levantamiento";
+  els.newProjectResponsible.value = "";
+  els.newProjectSurveyDate.value = todayIsoDate();
+  els.newProjectReviewer.value = "";
+  els.newProjectPrintDate.value = todayIsoDate();
   els.newProjectEast.value = "";
   els.newProjectNorth.value = "";
   els.newProjectDialog.showModal();
@@ -2628,6 +2728,12 @@ function createProjectFromDialog() {
   if (projects[name] && !window.confirm(`Ya existe "${name}". ¿Desea reemplazarlo con un proyecto nuevo?`)) return;
   state = createBlankState(name);
   state.station = { east, north };
+  state.projectMeta = {
+    responsible: els.newProjectResponsible.value.trim(),
+    surveyDate: els.newProjectSurveyDate.value,
+    reviewer: els.newProjectReviewer.value.trim(),
+    printDate: els.newProjectPrintDate.value || todayIsoDate(),
+  };
   loadedProjectName = null;
   undoStack.length = 0;
   redoStack.length = 0;
@@ -2645,11 +2751,37 @@ function setZoom(factor) {
 els.stationEast.addEventListener("focus", rememberInputState);
 els.stationEast.addEventListener("input", () => {
   state.station.east = toNumber(els.stationEast.value);
+  els.projectStationEast.value = els.stationEast.value;
   update(false);
 });
 els.stationNorth.addEventListener("focus", rememberInputState);
 els.stationNorth.addEventListener("input", () => {
   state.station.north = toNumber(els.stationNorth.value);
+  els.projectStationNorth.value = els.stationNorth.value;
+  update(false);
+});
+[
+  [els.projectResponsible, "responsible"],
+  [els.projectSurveyDate, "surveyDate"],
+  [els.projectReviewer, "reviewer"],
+  [els.projectPrintDate, "printDate"],
+].forEach(([input, field]) => {
+  input.addEventListener("focus", rememberInputState);
+  input.addEventListener("input", () => {
+    state.projectMeta[field] = input.value;
+    saveLocalState();
+  });
+});
+els.projectStationEast.addEventListener("focus", rememberInputState);
+els.projectStationEast.addEventListener("input", () => {
+  state.station.east = toNumber(els.projectStationEast.value);
+  els.stationEast.value = els.projectStationEast.value;
+  update(false);
+});
+els.projectStationNorth.addEventListener("focus", rememberInputState);
+els.projectStationNorth.addEventListener("input", () => {
+  state.station.north = toNumber(els.projectStationNorth.value);
+  els.stationNorth.value = els.projectStationNorth.value;
   update(false);
 });
 els.projectName.addEventListener("focus", rememberInputState);
@@ -2790,7 +2922,6 @@ els.center.addEventListener("click", () => {
 });
 els.zoomIn.addEventListener("click", () => setZoom(1.25));
 els.zoomOut.addEventListener("click", () => setZoom(0.8));
-els.sample.addEventListener("click", setSample);
 els.exportCsv.addEventListener("click", exportCsv);
 els.exportProcess.addEventListener("click", exportCalculationProcess);
 els.exportTxt.addEventListener("click", exportCoordinatesTxt);
@@ -2839,6 +2970,16 @@ els.paperFormat.addEventListener("change", () => {
   state.drawingScale.paper = els.paperFormat.value;
   update(false);
 });
+els.customPaperWidth.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.customWidth = clampNumber(els.customPaperWidth.value, 50, 5000);
+  update(false);
+});
+els.customPaperHeight.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.customHeight = clampNumber(els.customPaperHeight.value, 50, 5000);
+  update(false);
+});
 els.paperOrientation.addEventListener("change", () => {
   pushHistory();
   state.drawingScale.orientation = els.paperOrientation.value;
@@ -2862,7 +3003,7 @@ els.quickMovePoint.addEventListener("click", () => {
 });
 els.quickClearPoint.addEventListener("click", () => {
   const index = selectedPointIndex();
-  if (index >= 0) clearPointValues(index);
+  if (index >= 0) deleteObservation(index);
   else setQuickMode("clear");
 });
 els.quickMeasure.addEventListener("click", () => {
@@ -2885,6 +3026,16 @@ els.quickGrid.addEventListener("click", () => {
   state.showGrid = !state.showGrid;
   syncControls();
   update(false);
+});
+
+els.creditItems.forEach((item) => {
+  const index = Number(item.dataset.creditIndex);
+  item.querySelectorAll("[data-credit-field]").forEach((input) => {
+    input.addEventListener("input", () => {
+      credits[index][input.dataset.creditField] = input.value;
+      localStorage.setItem(CREDITS_KEY, JSON.stringify(credits));
+    });
+  });
 });
 
 els.canvas.addEventListener("wheel", (event) => {

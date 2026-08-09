@@ -63,6 +63,26 @@ button,
   cursor: pointer;
 }
 
+.button-link {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 720;
+  text-decoration: none;
+}
+
+.button-link:hover {
+  border-color: var(--accent);
+  background: var(--panel-soft);
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.38;
@@ -384,6 +404,7 @@ select:focus {
 input[type="number"],
 input[type="text"],
 input[type="search"],
+input[type="date"],
 input[type="color"],
 select {
   width: 100%;
@@ -500,9 +521,19 @@ canvas {
   min-width: 0;
 }
 
-.drawing-scale-controls select {
+.drawing-scale-controls select,
+.drawing-scale-controls input {
   width: 100%;
   margin-top: 4px;
+}
+
+.custom-paper-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
 
 .drawing-scale-info {
@@ -1053,6 +1084,22 @@ td select {
   flex: 1;
 }
 
+.project-data-panel {
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+
+.project-data-panel h2 {
+  margin-bottom: 14px;
+}
+
+.project-data-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .project-item.is-current {
   border-left-color: var(--success);
 }
@@ -1115,6 +1162,32 @@ td select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.credits-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.credit-item {
+  display: grid;
+  gap: 11px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+
+.credit-item h2 {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.credits-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .settings-section:last-child {
@@ -1381,7 +1454,8 @@ td select {
   }
 
   .zone-workspace,
-  .settings-grid {
+  .settings-grid,
+  .credits-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1505,6 +1579,112 @@ td select {
   .zone-form-grid,
   .settings-checks {
     grid-template-columns: 1fr;
+  }
+
+  .project-data-grid,
+  .custom-paper-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .table-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+  }
+
+  .table-wrap > table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    background: transparent;
+  }
+
+  .table-wrap thead {
+    display: none;
+  }
+
+  .table-wrap tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .table-wrap tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent-strong);
+    border-radius: 5px;
+    background: var(--panel);
+  }
+
+  .table-wrap td,
+  .table-wrap th:first-child,
+  .table-wrap td:first-child,
+  .table-wrap th:nth-child(2),
+  .table-wrap td:nth-child(2),
+  .table-wrap th:last-child,
+  .table-wrap td:last-child {
+    position: static;
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    white-space: normal;
+  }
+
+  .table-wrap th:nth-child(n + 3):nth-child(-n + 6),
+  .table-wrap td:nth-child(n + 3):nth-child(-n + 6) {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .table-wrap td::before {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.63rem;
+    font-weight: 720;
+    text-transform: uppercase;
+  }
+
+  .table-wrap td:nth-child(7),
+  .table-wrap td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .table-wrap td input,
+  .table-wrap td select,
+  .point-number-input,
+  .zone-cell-select,
+  .description-input,
+  .compact {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .table-wrap td[data-output] {
+    min-height: 36px;
+    padding: 9px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--bg-deep);
+  }
+
+  .row-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .row-actions button {
+    width: 100%;
   }
 
   .wide-field {
