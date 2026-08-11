@@ -1166,15 +1166,16 @@ td select {
 
 .credits-stage {
   padding: 32px clamp(18px, 3vw, 44px) 40px;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #a9adaf;
+  background: var(--panel);
 }
 
 .credits-team-title {
   margin-bottom: 28px;
-  color: #102c36;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 2.4rem;
+  color: var(--text);
+  font-size: 1.8rem;
+  font-weight: 800;
   text-align: center;
 }
 
@@ -1186,20 +1187,22 @@ td select {
 
 .credit-item {
   display: flex;
-  min-height: 360px;
+  min-height: 320px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 30px 22px;
-  border: 1px solid #d8dde0;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
   border-radius: 6px;
-  background: #f7f8f9;
-  color: #273943;
+  background: var(--panel-raised);
+  color: var(--text);
   text-align: center;
 }
 
 .credit-item.is-featured {
-  border-color: #d6a928;
+  border-color: var(--accent);
+  background: var(--panel-soft);
 }
 
 .credit-avatar {
@@ -1208,11 +1211,10 @@ td select {
   height: 112px;
   margin-bottom: 24px;
   place-items: center;
-  border: 5px solid #d6a928;
+  border: 3px solid var(--accent);
   border-radius: 50%;
-  background: #173842;
-  color: #ffffff;
-  font-family: Georgia, "Times New Roman", serif;
+  background: var(--bg-deep);
+  color: var(--accent);
   font-size: 2rem;
   font-weight: 700;
 }
@@ -1220,21 +1222,20 @@ td select {
 .credit-item h3 {
   max-width: 310px;
   margin-bottom: 14px;
-  color: #102c36;
-  font-family: Georgia, "Times New Roman", serif;
+  color: var(--text);
   font-size: 1.38rem;
   line-height: 1.15;
 }
 
 .credit-title {
-  color: #a87300;
+  color: var(--accent);
   font-size: 0.88rem;
 }
 
 .credit-item p {
   max-width: 300px;
   margin: 16px 0 0;
-  color: #44545c;
+  color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.5;
 }
