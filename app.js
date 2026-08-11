@@ -1942,7 +1942,7 @@ function createTechnicalPlanCanvas(survey, options = {}) {
         colors
       ));
     }
-    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
+    if (state.showZoneNames && !options.hideZoneLabels && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
   });
   drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH, true);
   drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true, false, colors);
@@ -2526,7 +2526,7 @@ function printReport() {
   const scale = drawingScaleDetails(survey);
   const mainZone = state.zones.find((zone) => zone.type === "polygon") || state.zones[0];
   const mainAnalysis = mainZone ? survey.analyses.get(mainZone.id) : null;
-  const image = createTechnicalPlanCanvas(survey, { focusZoneId: mainZone?.id }).toDataURL("image/png");
+  const image = createTechnicalPlanCanvas(survey, { hideZoneLabels: true }).toDataURL("image/png");
   const templateUrl = new URL("./assets/report-template.png", window.location.href).href;
   const segmentByPoint = reportSegments(survey);
   const validPoints = survey.points.filter((point) => point.hasCoordinates);
@@ -2539,7 +2539,7 @@ function printReport() {
     const analysis = survey.analyses.get(zone.id);
     return `<tr><td>${escapeHtml(zone.name)}</td><td>${escapeHtml(zoneTypeLabel(zone.type))}</td><td>${analysis.count}</td><td>${formatNumber(analysis.area)}</td><td>${formatNumber(analysis.measure)}</td></tr>`;
   }).join("");
-  const pointRows = validPoints.map((point) => {
+  const reportRows = validPoints.map((point) => {
     const zone = state.zones.find((item) => item.id === point.zoneId);
     const source = point.source;
     const bearing = bearingComponents(point.azimuth);
@@ -2548,17 +2548,25 @@ function printReport() {
     const southProjection = point.deltaNorth < 0 ? formatNumber(Math.abs(point.deltaNorth)) : "";
     const eastProjection = point.deltaEast >= 0 ? formatNumber(point.deltaEast) : "";
     const westProjection = point.deltaEast < 0 ? formatNumber(Math.abs(point.deltaEast)) : "";
-    return `<tr>
+    return {
+      calculation: `<tr>
       <td>${escapeHtml(point.id)}</td><td>${escapeHtml(zone?.name || "")}</td><td>${escapeHtml(point.description)}</td>
       <td>${formatPlainNumber(source.degrees, 0)}</td><td>${formatPlainNumber(source.minutes, 0)}</td><td>${formatPlainNumber(source.seconds, 3)}</td>
       <td>${formatNumber(point.distance)}</td><td>${formatNumber(Math.sin(point.radians), 6)}</td><td>${formatNumber(Math.cos(point.radians), 6)}</td>
       <td>${bearing.northSouth}</td><td>${bearing.degrees}</td><td>${bearing.minutes}</td><td>${formatPlainNumber(bearing.seconds, 3)}</td><td>${bearing.eastWest}</td>
+    </tr>`,
+      projection: `<tr>
+      <td>${escapeHtml(point.id)}</td><td>${escapeHtml(zone?.name || "")}</td><td>${escapeHtml(point.description)}</td>
       <td>${northProjection}</td><td>${southProjection}</td><td>${eastProjection}</td><td>${westProjection}</td>
       <td>${formatNumber(point.north)}</td><td>${formatNumber(point.east)}</td>
       <td>${segment ? formatNumber(segment.distance) : ""}</td><td>${segment ? escapeHtml(segment.label) : ""}</td>
-    </tr>`;
-  }).join("");
-  const initialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="15"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
+    </tr>`,
+    };
+  });
+  const calculationRows = reportRows.map((row) => row.calculation).join("");
+  const projectionRows = reportRows.map((row) => row.projection).join("");
+  const calculationInitialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="11"></td></tr>`;
+  const projectionInitialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="4"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
   const popup = window.open("", "_blank", "width=1100,height=800");
   if (!popup) {
     showToast("El navegador bloqueó la ventana de impresión. Permita las ventanas emergentes e inténtelo de nuevo.", true);
@@ -2566,25 +2574,40 @@ function printReport() {
   }
   popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe_TOPORAY_${escapeHtml(safeFileName(state.projectName))}</title><style>
     @page{size:letter landscape;margin:0}
-    *{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff;break-after:page}.report-page:last-of-type{break-after:auto}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:16px;margin:0 0 3px}.project-data{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px 9px;margin-bottom:3px;font-size:7.3px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 5px;font-size:7px;color:#263840;white-space:nowrap}h2{font-size:10px;margin:0 0 3px}.zone-section{margin-bottom:5px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:6.8px}.main-table{font-size:5.8px}.zone-table th,.zone-table td{border:.35px solid #111;padding:2px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;line-height:1.05;background:#fff}.zone-table th{font-weight:700}.main-table th,.main-table td{border:.25px solid #111;padding:.6px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;line-height:1;background:#fff;color:#111}.main-table thead th{font-weight:700}.main-table thead tr:first-child th{font-size:6px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:8px}.table-title{margin-top:0}.report-total{margin:3px 7% 0 0;text-align:right;font-size:7px;font-weight:700}.graph-content{display:flex;flex-direction:column}.graph-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:5px}.graph-heading h1{margin:0}.graph-meta{margin:0;color:#263840;font-size:8px;text-align:right}.plan-image{display:block;width:100%;height:5.48in;border:.35px solid #111;object-fit:contain;background:#fff}@media screen{html,body{width:auto;min-height:100%;background:#dfe5e7}body{display:grid;gap:16px;padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{display:block;padding:0}.report-page{margin:0}}
+    *{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff;break-after:page}.report-page:last-of-type{break-after:auto}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:18px;margin:0 0 8px;line-height:1.15}h2{font-size:13px;margin:0 0 6px}.project-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 18px;margin-bottom:10px;font-size:11px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 12px;font-size:10px;line-height:1.45;color:#263840}.zone-section{margin-bottom:12px}.zone-table,.results-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:10.5px}.zone-table th,.zone-table td,.results-table th,.results-table td{border:.35px solid #111;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;background:#fff}.zone-table th,.zone-table td{padding:5px 6px;line-height:1.2}.zone-table th{font-weight:700}.zone-table td:first-child,.zone-table td:nth-child(2){text-align:left}.summary-metrics{display:grid;grid-template-columns:1.35fr repeat(3,1fr);border:.35px solid #111;margin-top:12px}.summary-metric{min-width:0;padding:9px 10px;border-right:.35px solid #111}.summary-metric:last-child{border-right:0}.summary-metric span{display:block;margin-bottom:3px;font-size:8.5px;text-transform:uppercase;color:#4a5960}.summary-metric strong{display:block;font-size:13px;overflow-wrap:anywhere}.page-subtitle{margin:-3px 0 10px;font-size:10.5px;color:#43535b}.results-table{font-size:10.2px}.projection-table{font-size:10.8px}.results-table th,.results-table td{padding:4px 3px;line-height:1.15}.results-table thead th{font-weight:700}.results-table thead tr:first-child th{font-size:10.5px}.results-table td:nth-child(2),.results-table td:nth-child(3){text-align:left}.calculation-table th:nth-child(2),.calculation-table td:nth-child(2){width:12%}.calculation-table th:nth-child(3),.calculation-table td:nth-child(3){width:15%}.projection-table th:nth-child(2),.projection-table td:nth-child(2){width:15%}.projection-table th:nth-child(3),.projection-table td:nth-child(3){width:18%}.initial-row td{height:23px;font-weight:600}.report-total{margin-top:8px;text-align:right;font-size:11px;font-weight:700}.graph-content{display:flex;flex-direction:column}.graph-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:7px}.graph-heading h1{margin:0}.graph-meta{margin:0;color:#263840;font-size:9px;text-align:right}.plan-image{display:block;width:100%;height:5.42in;border:.35px solid #111;object-fit:contain;background:#fff}@media screen{html,body{width:auto;min-height:100%;background:#dfe5e7}body{display:grid;gap:16px;padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{display:block;padding:0}.report-page{margin:0}}
   </style></head><body><button class="print-command" onclick="window.print()">Imprimir o guardar como PDF</button>
-    <main class="report-page">
+    <main class="report-page summary-page">
       <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
       <section class="report-content">
         <h1>${escapeHtml(state.projectName)}</h1>
         <div class="project-data"><span><strong>Fecha del levantamiento:</strong> ${escapeHtml(formatDateValue(state.projectMeta.surveyDate))}</span><span><strong>Responsable:</strong> ${escapeHtml(state.projectMeta.responsible || "No registrado")}</span><span><strong>Revisor:</strong> ${escapeHtml(state.projectMeta.reviewer || "No registrado")}</span><span><strong>Fecha de impresión:</strong> ${escapeHtml(formatDateValue(state.projectMeta.printDate || todayIsoDate()))}</span></div>
-        <p class="technical-data"><strong>Formato:</strong> ${paperName}${paperOrientation} · <strong>Dimensiones:</strong> ${paperDimensions} · <strong>Escala:</strong> 1:${scale.selected} · <strong>Área principal:</strong> ${formatNumber(totalArea)} ${areaUnitSymbol()} · <strong>Perímetro principal:</strong> ${formatNumber(totalPerimeter)} ${unitSymbol()} · <strong>BM:</strong> E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p>
-        <section class="zone-section"><h2>Resumen por zonas y terrenos</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows}</tbody></table></section>
-        <h2 class="table-title">Puntos y resultados</h2>
-        <table class="main-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead><tbody>${initialRow}${pointRows || '<tr><td colspan="22">No hay puntos calculados.</td></tr>'}</tbody></table>
+        <p class="technical-data"><strong>Formato:</strong> ${paperName}${paperOrientation} · <strong>Dimensiones:</strong> ${paperDimensions} · <strong>Escala:</strong> 1:${scale.selected} · <strong>BM:</strong> E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p>
+        <section class="zone-section"><h2>Resumen por zonas y terrenos</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows || '<tr><td colspan="5">No hay zonas registradas.</td></tr>'}</tbody></table></section>
+        <div class="summary-metrics"><div class="summary-metric"><span>Terreno principal</span><strong>${escapeHtml(mainZone?.name || "No registrado")}</strong></div><div class="summary-metric"><span>Puntos calculados</span><strong>${validPoints.length}</strong></div><div class="summary-metric"><span>Área principal</span><strong>${formatNumber(totalArea)} ${areaUnitSymbol()}</strong></div><div class="summary-metric"><span>Perímetro principal</span><strong>${formatNumber(totalPerimeter)} ${unitSymbol()}</strong></div></div>
+      </section>
+    </main>
+    <main class="report-page calculation-page">
+      <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
+      <section class="report-content">
+        <h1>Puntos y resultados I</h1>
+        <p class="page-subtitle">Observaciones, azimut, razones trigonométricas y rumbo.</p>
+        <table class="results-table calculation-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th></tr></thead><tbody>${calculationInitialRow}${calculationRows || '<tr><td colspan="14">No hay puntos calculados.</td></tr>'}</tbody></table>
+      </section>
+    </main>
+    <main class="report-page projection-page">
+      <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
+      <section class="report-content">
+        <h1>Puntos y resultados II</h1>
+        <p class="page-subtitle">Proyecciones, coordenadas topográficas y perímetro.</p>
+        <table class="results-table projection-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead><tbody>${projectionInitialRow}${projectionRows || '<tr><td colspan="11">No hay puntos calculados.</td></tr>'}</tbody></table>
         <div class="report-total">Perímetro del terreno principal: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
       </section>
     </main>
     <main class="report-page graph-page">
       <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
       <section class="report-content graph-content">
-        <div class="graph-heading"><h1>Plano del terreno principal</h1><p class="graph-meta">${escapeHtml(mainZone?.name || "Terreno principal")} · Escala 1:${scale.selected} · E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p></div>
-        <img class="plan-image" src="${image}" alt="Plano ampliado del terreno principal">
+        <div class="graph-heading"><h1>Plano del levantamiento</h1><p class="graph-meta">Terreno principal y ${state.zones.filter((zone) => zone.visible && zone.id !== mainZone?.id).length} zona(s) visible(s) · Escala 1:${scale.selected} · E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p></div>
+        <img class="plan-image" src="${image}" alt="Plano ampliado con todas las zonas visibles">
       </section>
     </main>
   </body></html>`);
