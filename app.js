@@ -1680,7 +1680,7 @@ function drawZoneGeometry(ctx, analysis, zone, color, x, y, exportMode = false) 
   ctx.restore();
 }
 
-function drawPoint(ctx, x, y, label, color, station = false, selected = false, colors = plotColors()) {
+function drawPoint(ctx, x, y, label, color, station = false, selected = false, colors = plotColors(), labelPlacement = null) {
   const exportMode = colors.exportMode === true;
   if (selected) {
     ctx.strokeStyle = "#f2c94c";
@@ -1699,18 +1699,41 @@ function drawPoint(ctx, x, y, label, color, station = false, selected = false, c
   ctx.fillStyle = colors.text;
   ctx.font = `700 ${exportMode ? 22 : 13}px Segoe UI, Arial`;
   if (label) {
-    const labelX = x + (exportMode ? 11 : 8);
-    const labelY = y - (exportMode ? 11 : 8);
+    const labelX = x + (labelPlacement?.dx ?? (exportMode ? 11 : 8));
+    const labelY = y + (labelPlacement?.dy ?? (exportMode ? -11 : -8));
+    ctx.save();
+    ctx.textAlign = labelPlacement?.align || "left";
     if (exportMode) {
-      ctx.save();
       ctx.strokeStyle = "rgba(255, 255, 255, 0.98)";
       ctx.lineWidth = 5;
       ctx.lineJoin = "round";
       ctx.strokeText(String(label), labelX, labelY);
-      ctx.restore();
+      ctx.fillStyle = colors.text;
     }
     ctx.fillText(String(label), labelX, labelY);
+    ctx.restore();
   }
+}
+
+function outwardPointLabelPlacement(point, index, analysis, x, y) {
+  const center = analysis.points.reduce(
+    (sum, item) => ({ x: sum.x + x(item.east), y: sum.y + y(item.north) }),
+    { x: 0, y: 0 }
+  );
+  center.x /= analysis.points.length;
+  center.y /= analysis.points.length;
+  let dx = x(point.east) - center.x;
+  let dy = y(point.north) - center.y;
+  if (Math.hypot(dx, dy) < 2) {
+    const angle = (index / Math.max(analysis.points.length, 1)) * Math.PI * 2 - Math.PI / 2;
+    dx = Math.cos(angle);
+    dy = Math.sin(angle);
+  }
+  return {
+    dx: dx >= 0 ? 14 : -14,
+    dy: dy >= 0 ? 29 : -14,
+    align: dx >= 0 ? "left" : "right",
+  };
 }
 
 function drawStationGuides(ctx, x, y, margin, plotW, plotH, exportMode = false) {
@@ -1732,6 +1755,24 @@ function drawStationCoords(ctx, x, y, station, colors = plotColors()) {
   ctx.fillStyle = colors.text;
   ctx.font = `700 ${exportMode ? 20 : 13}px Segoe UI, Arial`;
   ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 10, y + (exportMode ? 22 : 13));
+}
+
+function drawTechnicalStationSummary(ctx, station, margin, colors) {
+  const dotX = margin.left + 190;
+  const textY = 34;
+  ctx.save();
+  ctx.fillStyle = "#c64f32";
+  ctx.beginPath();
+  ctx.arc(dotX, textY - 5, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = colors.text;
+  ctx.font = "700 18px Segoe UI, Arial";
+  ctx.fillText(
+    `BM - Punto de referencia · E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`,
+    dotX + 13,
+    textY
+  );
+  ctx.restore();
 }
 
 function drawZoneName(ctx, analysis, zone, x, y, colors = plotColors()) {
@@ -1915,7 +1956,7 @@ function createTechnicalPlanCanvas(survey, options = {}) {
   const northValues = [station, ...visiblePoints].map((point) => point.north);
   let eastAxis = niceAxis(Math.min(...eastValues), Math.max(...eastValues), station.east);
   let northAxis = niceAxis(Math.min(...northValues), Math.max(...northValues), station.north);
-  const margin = { left: 100, right: 55, top: 55, bottom: 85 };
+  const margin = { left: 100, right: 55, top: 78, bottom: 85 };
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
   ({ eastAxis, northAxis } = balancedAxes(eastAxis, northAxis, plotW, plotH, station));
@@ -1931,7 +1972,7 @@ function createTechnicalPlanCanvas(survey, options = {}) {
     const displayColor = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
     if (state.showLines && zone.type !== "points") drawZoneGeometry(ctx, analysis, zone, displayColor, x, y, true);
     if (state.showPoints) {
-      analysis.points.forEach((point) => drawPoint(
+      analysis.points.forEach((point, index) => drawPoint(
         ctx,
         x(point.east),
         y(point.north),
@@ -1939,14 +1980,15 @@ function createTechnicalPlanCanvas(survey, options = {}) {
         displayColor,
         false,
         false,
-        colors
+        colors,
+        outwardPointLabelPlacement(point, index, analysis, x, y)
       ));
     }
     if (state.showZoneNames && !options.hideZoneLabels && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
   });
   drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH, true);
-  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true, false, colors);
-  drawStationCoords(ctx, x(station.east), y(station.north), station, colors);
+  drawPoint(ctx, x(station.east), y(station.north), "", "#c64f32", true, false, colors);
+  drawTechnicalStationSummary(ctx, station, margin, colors);
   drawLegend(ctx, exportZones, survey, width, margin, colors);
   ctx.fillStyle = colors.text;
   ctx.font = "700 24px Segoe UI, Arial";
@@ -2473,7 +2515,7 @@ function parseCsvLine(line) {
 
 function exportGraphImage() {
   const survey = computeSurvey();
-  const technicalCanvas = createTechnicalPlanCanvas(survey);
+  const technicalCanvas = createTechnicalPlanCanvas(survey, { hideZoneLabels: true });
   technicalCanvas.toBlob((blob) => {
     if (!blob) return;
     downloadFile(blob, `TOPORAY_${safeFileName(state.projectName)}_grafica.png`, "image/png");
