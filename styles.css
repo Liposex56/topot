@@ -1164,30 +1164,79 @@ td select {
   gap: 14px;
 }
 
+.credits-stage {
+  padding: 32px clamp(18px, 3vw, 44px) 40px;
+  border-radius: 8px;
+  background: #a9adaf;
+}
+
+.credits-team-title {
+  margin-bottom: 28px;
+  color: #102c36;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.4rem;
+  text-align: center;
+}
+
 .credits-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: clamp(18px, 3vw, 36px);
 }
 
 .credit-item {
+  display: flex;
+  min-height: 360px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 22px;
+  border: 1px solid #d8dde0;
+  border-radius: 6px;
+  background: #f7f8f9;
+  color: #273943;
+  text-align: center;
+}
+
+.credit-item.is-featured {
+  border-color: #d6a928;
+}
+
+.credit-avatar {
   display: grid;
-  gap: 11px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--panel);
+  width: 112px;
+  height: 112px;
+  margin-bottom: 24px;
+  place-items: center;
+  border: 5px solid #d6a928;
+  border-radius: 50%;
+  background: #173842;
+  color: #ffffff;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+  font-weight: 700;
 }
 
-.credit-item h2 {
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
+.credit-item h3 {
+  max-width: 310px;
+  margin-bottom: 14px;
+  color: #102c36;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.38rem;
+  line-height: 1.15;
 }
 
-.credits-note {
-  margin-top: 12px;
-  color: var(--muted);
-  font-size: 0.72rem;
+.credit-title {
+  color: #a87300;
+  font-size: 0.88rem;
+}
+
+.credit-item p {
+  max-width: 300px;
+  margin: 16px 0 0;
+  color: #44545c;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 .settings-section:last-child {
@@ -1459,6 +1508,14 @@ td select {
     grid-template-columns: 1fr;
   }
 
+  .credits-stage {
+    padding: 26px 18px 30px;
+  }
+
+  .credit-item {
+    min-height: 320px;
+  }
+
   .settings-section:last-child {
     grid-column: auto;
   }
@@ -1584,6 +1641,16 @@ td select {
   .project-data-grid,
   .custom-paper-fields {
     grid-template-columns: 1fr;
+  }
+
+  .credits-team-title {
+    font-size: 2rem;
+  }
+
+  .credit-avatar {
+    width: 92px;
+    height: 92px;
+    font-size: 1.6rem;
   }
 
   .table-wrap {

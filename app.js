@@ -1,7 +1,6 @@
 const STORAGE_KEY = "levantamientos-topograficos-v1";
 const PROJECTS_KEY = "levantamientos-topograficos-projects-v1";
 const CURRENT_PROJECT_KEY = "levantamientos-topograficos-current-project-v1";
-const CREDITS_KEY = "levantamientos-topograficos-credits-v1";
 const HISTORY_LIMIT = 60;
 const ZONE_COLORS = ["#0b6b5d", "#2962a3", "#d36b22", "#6d7378", "#8a4f9e", "#b13f4b"];
 const PAPER_FORMATS = {
@@ -100,7 +99,6 @@ const els = {
   projectPrintDate: document.querySelector("#projectPrintDate"),
   projectStationEast: document.querySelector("#projectStationEast"),
   projectStationNorth: document.querySelector("#projectStationNorth"),
-  creditItems: [...document.querySelectorAll("[data-credit-index]")],
   units: document.querySelector("#unitsSelect"),
   gridSize: document.querySelector("#gridSizeSelect"),
   appearance: document.querySelector("#appearanceSelect"),
@@ -158,7 +156,6 @@ let quickMode = null;
 let measurePointUids = [];
 let plotTransform = null;
 let dragState = null;
-let credits = loadCredits();
 const undoStack = [];
 const redoStack = [];
 
@@ -332,30 +329,6 @@ function formatDateValue(value) {
   if (!value) return "No registrada";
   const date = new Date(`${value}T12:00:00`);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("es-CO");
-}
-
-function loadCredits() {
-  const fallback = Array.from({ length: 3 }, () => ({ name: "", title: "", affiliation: "" }));
-  try {
-    const stored = JSON.parse(localStorage.getItem(CREDITS_KEY));
-    if (!Array.isArray(stored)) return fallback;
-    return fallback.map((item, index) => ({
-      name: String(stored[index]?.name || item.name),
-      title: String(stored[index]?.title || item.title),
-      affiliation: String(stored[index]?.affiliation || item.affiliation),
-    }));
-  } catch {
-    return fallback;
-  }
-}
-
-function syncCreditControls() {
-  els.creditItems.forEach((item) => {
-    const index = Number(item.dataset.creditIndex);
-    item.querySelectorAll("[data-credit-field]").forEach((input) => {
-      input.value = credits[index]?.[input.dataset.creditField] || "";
-    });
-  });
 }
 
 function normalizeObservation(observation) {
@@ -1631,7 +1604,7 @@ function plotColors(forceWhite = false) {
     return {
       background: "#ffffff", grid: "rgba(67, 105, 120, 0.2)", muted: "#536973", axis: "#718690",
       text: "#263840", pointStroke: "#ffffff", labelBackground: "rgba(255, 255, 255, 0.94)",
-      legendBackground: "rgba(255, 255, 255, 0.96)", legendText: "#263840",
+      legendBackground: "rgba(255, 255, 255, 0.96)", legendText: "#263840", exportMode: true,
     };
   }
   return state.appearance === "light"
@@ -1648,18 +1621,19 @@ function plotColors(forceWhite = false) {
 }
 
 function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors = plotColors()) {
+  const exportMode = colors.exportMode === true;
   if (state.showGrid) {
     ctx.strokeStyle = colors.grid;
     ctx.fillStyle = colors.muted;
-    ctx.lineWidth = 1;
-    ctx.font = "12px Segoe UI, Arial";
+    ctx.lineWidth = exportMode ? 0.65 : 1;
+    ctx.font = `${exportMode ? 18 : 12}px Segoe UI, Arial`;
     eastAxis.ticks.forEach((value) => {
       const px = x(value);
       ctx.beginPath();
       ctx.moveTo(px, margin.top);
       ctx.lineTo(px, margin.top + plotH);
       ctx.stroke();
-      ctx.fillText(formatNumber(value, state.axisDecimals), px - 18, height - 25);
+      ctx.fillText(formatNumber(value, state.axisDecimals), px - (exportMode ? 28 : 18), height - (exportMode ? 34 : 25));
     });
     northAxis.ticks.forEach((value) => {
       const py = y(value);
@@ -1667,11 +1641,11 @@ function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, h
       ctx.moveTo(margin.left, py);
       ctx.lineTo(margin.left + plotW, py);
       ctx.stroke();
-      ctx.fillText(formatNumber(value, state.axisDecimals), 8, py + 4);
+      ctx.fillText(formatNumber(value, state.axisDecimals), exportMode ? 10 : 8, py + (exportMode ? 6 : 4));
     });
   }
   ctx.strokeStyle = colors.axis;
-  ctx.lineWidth = 1.3;
+  ctx.lineWidth = exportMode ? 1 : 1.3;
   ctx.beginPath();
   ctx.moveTo(margin.left, margin.top + plotH);
   ctx.lineTo(margin.left + plotW, margin.top + plotH);
@@ -1680,10 +1654,12 @@ function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, h
   ctx.stroke();
 }
 
-function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
+function drawZoneGeometry(ctx, analysis, zone, color, x, y, exportMode = false) {
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.lineWidth = analysis.status === "Con errores" ? 2.2 : 1.6;
+  ctx.lineWidth = exportMode
+    ? (analysis.status === "Con errores" ? 1.4 : 0.9)
+    : (analysis.status === "Con errores" ? 2.2 : 1.6);
   if (analysis.status === "Con errores") ctx.setLineDash([8, 5]);
   analysis.segments.forEach((segment) => {
     if (segment.length < 2) return;
@@ -1694,7 +1670,7 @@ function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
     });
     if (zone.type === "polygon" && zone.closed && analysis.complete && segment.length === analysis.points.length) {
       ctx.closePath();
-      ctx.globalAlpha = 0.1;
+      ctx.globalAlpha = exportMode ? 0.055 : 0.1;
       ctx.fillStyle = color;
       ctx.fill();
       ctx.globalAlpha = 1;
@@ -1705,6 +1681,7 @@ function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
 }
 
 function drawPoint(ctx, x, y, label, color, station = false, selected = false, colors = plotColors()) {
+  const exportMode = colors.exportMode === true;
   if (selected) {
     ctx.strokeStyle = "#f2c94c";
     ctx.lineWidth = 3;
@@ -1714,20 +1691,32 @@ function drawPoint(ctx, x, y, label, color, station = false, selected = false, c
   }
   ctx.fillStyle = color;
   ctx.strokeStyle = colors.pointStroke;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = exportMode ? 1.4 : 2.5;
   ctx.beginPath();
-  ctx.arc(x, y, station ? 7 : 5.5, 0, Math.PI * 2);
+  ctx.arc(x, y, station ? (exportMode ? 9 : 7) : (exportMode ? 7 : 5.5), 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = colors.text;
-  ctx.font = "700 13px Segoe UI, Arial";
-  if (label) ctx.fillText(String(label), x + 8, y - 8);
+  ctx.font = `700 ${exportMode ? 22 : 13}px Segoe UI, Arial`;
+  if (label) {
+    const labelX = x + (exportMode ? 11 : 8);
+    const labelY = y - (exportMode ? 11 : 8);
+    if (exportMode) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.98)";
+      ctx.lineWidth = 5;
+      ctx.lineJoin = "round";
+      ctx.strokeText(String(label), labelX, labelY);
+      ctx.restore();
+    }
+    ctx.fillText(String(label), labelX, labelY);
+  }
 }
 
-function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
+function drawStationGuides(ctx, x, y, margin, plotW, plotH, exportMode = false) {
   ctx.save();
   ctx.strokeStyle = "rgba(239, 107, 94, 0.66)";
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = exportMode ? 0.75 : 1.2;
   ctx.setLineDash([5, 5]);
   ctx.beginPath();
   ctx.moveTo(x, y);
@@ -1739,12 +1728,14 @@ function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
 }
 
 function drawStationCoords(ctx, x, y, station, colors = plotColors()) {
+  const exportMode = colors.exportMode === true;
   ctx.fillStyle = colors.text;
-  ctx.font = "700 13px Segoe UI, Arial";
-  ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 9, y + 13);
+  ctx.font = `700 ${exportMode ? 20 : 13}px Segoe UI, Arial`;
+  ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 10, y + (exportMode ? 22 : 13));
 }
 
 function drawZoneName(ctx, analysis, zone, x, y, colors = plotColors()) {
+  const exportMode = colors.exportMode === true;
   const center = analysis.points.reduce(
     (sum, point) => ({ east: sum.east + point.east, north: sum.north + point.north }),
     { east: 0, north: 0 }
@@ -1753,40 +1744,42 @@ function drawZoneName(ctx, analysis, zone, x, y, colors = plotColors()) {
   center.north /= analysis.points.length;
   const label = zone.name;
   ctx.save();
-  ctx.font = "700 13px Segoe UI, Arial";
-  const width = ctx.measureText(label).width + 12;
+  ctx.font = `700 ${exportMode ? 20 : 13}px Segoe UI, Arial`;
+  const width = ctx.measureText(label).width + (exportMode ? 18 : 12);
   const px = x(center.east) - width / 2;
-  const py = y(center.north) - 10;
+  const py = y(center.north) - (exportMode ? 15 : 10);
   ctx.fillStyle = colors.labelBackground;
-  ctx.fillRect(px, py, width, 20);
+  ctx.fillRect(px, py, width, exportMode ? 30 : 20);
   ctx.fillStyle = zone.color;
-  ctx.fillText(label, px + 6, py + 14);
+  ctx.fillText(label, px + (exportMode ? 9 : 6), py + (exportMode ? 22 : 14));
   ctx.restore();
 }
 
 function drawLegend(ctx, zones, survey, width, margin, colors = plotColors()) {
   if (!zones.length) return;
+  const exportMode = colors.exportMode === true;
   const maxItems = Math.min(zones.length, 7);
-  const boxWidth = Math.min(185, width * 0.42);
-  const boxHeight = 12 + maxItems * 22;
+  const itemHeight = exportMode ? 31 : 22;
+  const boxWidth = Math.min(exportMode ? 270 : 185, width * 0.42);
+  const boxHeight = (exportMode ? 17 : 12) + maxItems * itemHeight;
   const left = width - margin.right - boxWidth;
   const top = margin.top + 4;
   ctx.save();
   ctx.fillStyle = colors.legendBackground;
   ctx.strokeStyle = "rgba(143, 164, 174, 0.5)";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = exportMode ? 0.7 : 1;
   ctx.fillRect(left, top, boxWidth, boxHeight);
   ctx.strokeRect(left, top, boxWidth, boxHeight);
-  ctx.font = "700 12px Segoe UI, Arial";
+  ctx.font = `700 ${exportMode ? 18 : 12}px Segoe UI, Arial`;
   zones.slice(0, maxItems).forEach((zone, index) => {
     const analysis = survey.analyses.get(zone.id);
     const color = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
-    const y = top + 18 + index * 22;
+    const y = top + (exportMode ? 25 : 18) + index * itemHeight;
     ctx.fillStyle = color;
-    ctx.fillRect(left + 9, y - 9, 11, 11);
+    ctx.fillRect(left + 9, y - (exportMode ? 14 : 9), exportMode ? 15 : 11, exportMode ? 15 : 11);
     ctx.fillStyle = colors.legendText;
     const label = zone.name.length > 22 ? `${zone.name.slice(0, 20)}...` : zone.name;
-    ctx.fillText(label, left + 27, y);
+    ctx.fillText(label, left + (exportMode ? 34 : 27), y);
   });
   ctx.restore();
 }
@@ -1909,8 +1902,8 @@ function renderDrawingScale(survey) {
 
 function createTechnicalPlanCanvas(survey, options = {}) {
   const canvas = document.createElement("canvas");
-  canvas.width = 1000;
-  canvas.height = 440;
+  canvas.width = 1400;
+  canvas.height = 820;
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
@@ -1922,7 +1915,7 @@ function createTechnicalPlanCanvas(survey, options = {}) {
   const northValues = [station, ...visiblePoints].map((point) => point.north);
   let eastAxis = niceAxis(Math.min(...eastValues), Math.max(...eastValues), station.east);
   let northAxis = niceAxis(Math.min(...northValues), Math.max(...northValues), station.north);
-  const margin = { left: 70, right: 30, top: 32, bottom: 55 };
+  const margin = { left: 100, right: 55, top: 55, bottom: 85 };
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
   ({ eastAxis, northAxis } = balancedAxes(eastAxis, northAxis, plotW, plotH, station));
@@ -1936,7 +1929,7 @@ function createTechnicalPlanCanvas(survey, options = {}) {
   exportZones.forEach((zone) => {
     const analysis = survey.analyses.get(zone.id);
     const displayColor = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
-    if (state.showLines && zone.type !== "points") drawZoneGeometry(ctx, analysis, zone, displayColor, x, y);
+    if (state.showLines && zone.type !== "points") drawZoneGeometry(ctx, analysis, zone, displayColor, x, y, true);
     if (state.showPoints) {
       analysis.points.forEach((point) => drawPoint(
         ctx,
@@ -1951,14 +1944,14 @@ function createTechnicalPlanCanvas(survey, options = {}) {
     }
     if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
   });
-  drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH);
+  drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH, true);
   drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true, false, colors);
   drawStationCoords(ctx, x(station.east), y(station.north), station, colors);
   drawLegend(ctx, exportZones, survey, width, margin, colors);
   ctx.fillStyle = colors.text;
-  ctx.font = "700 18px Segoe UI, Arial";
-  ctx.fillText("Este (E)", margin.left + plotW - 80, height - 18);
-  ctx.fillText("Norte (N)", margin.left, 26);
+  ctx.font = "700 24px Segoe UI, Arial";
+  ctx.fillText("Este (E)", margin.left + plotW - 105, height - 25);
+  ctx.fillText("Norte (N)", margin.left, 35);
   return canvas;
 }
 
@@ -1993,7 +1986,6 @@ function syncControls() {
   els.distanceHeader.textContent = `Distancia (${unitSymbol()})`;
   renderProjectList();
   renderProjectsView();
-  syncCreditControls();
   updateUndoButtons();
 }
 
@@ -2574,7 +2566,7 @@ function printReport() {
   }
   popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe_TOPORAY_${escapeHtml(safeFileName(state.projectName))}</title><style>
     @page{size:letter landscape;margin:0}
-    *{box-sizing:border-box}html,body{width:11in;height:8.5in;margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:16px;margin:0 0 3px}.project-data{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px 9px;margin-bottom:3px;font-size:7.3px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 4px;font-size:7px;color:#263840;white-space:nowrap}.layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);height:2.42in;gap:8px;align-items:start;margin-bottom:4px}.layout>div{min-width:0}.plan-image{display:block;width:100%;height:2.38in;border:.5px solid #111;object-fit:contain;background:#fff}h2{font-size:10px;margin:0 0 3px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:6.8px}.main-table{font-size:5.8px}.zone-table th,.zone-table td{border:.5px solid #111;padding:2px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;line-height:1.05;background:#fff}.zone-table th{font-weight:700}.main-table th,.main-table td{border:.35px solid #111;padding:.6px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;line-height:1;background:#fff;color:#111}.main-table thead th{font-weight:700}.main-table thead tr:first-child th{font-size:6px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:8px}.table-title{margin-top:0}.report-total{margin:3px 7% 0 0;text-align:right;font-size:7px;font-weight:700}@media screen{html,body{width:auto;height:auto;min-height:100%;background:#dfe5e7}body{padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{padding:0}.report-page{margin:0;break-after:page}}
+    *{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff;break-after:page}.report-page:last-of-type{break-after:auto}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:16px;margin:0 0 3px}.project-data{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px 9px;margin-bottom:3px;font-size:7.3px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 5px;font-size:7px;color:#263840;white-space:nowrap}h2{font-size:10px;margin:0 0 3px}.zone-section{margin-bottom:5px}.zone-table,.main-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:6.8px}.main-table{font-size:5.8px}.zone-table th,.zone-table td{border:.35px solid #111;padding:2px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;line-height:1.05;background:#fff}.zone-table th{font-weight:700}.main-table th,.main-table td{border:.25px solid #111;padding:.6px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;line-height:1;background:#fff;color:#111}.main-table thead th{font-weight:700}.main-table thead tr:first-child th{font-size:6px}.main-table td:nth-child(2),.main-table td:nth-child(3){text-align:left}.initial-row td{height:8px}.table-title{margin-top:0}.report-total{margin:3px 7% 0 0;text-align:right;font-size:7px;font-weight:700}.graph-content{display:flex;flex-direction:column}.graph-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:5px}.graph-heading h1{margin:0}.graph-meta{margin:0;color:#263840;font-size:8px;text-align:right}.plan-image{display:block;width:100%;height:5.48in;border:.35px solid #111;object-fit:contain;background:#fff}@media screen{html,body{width:auto;min-height:100%;background:#dfe5e7}body{display:grid;gap:16px;padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{display:block;padding:0}.report-page{margin:0}}
   </style></head><body><button class="print-command" onclick="window.print()">Imprimir o guardar como PDF</button>
     <main class="report-page">
       <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
@@ -2582,10 +2574,17 @@ function printReport() {
         <h1>${escapeHtml(state.projectName)}</h1>
         <div class="project-data"><span><strong>Fecha del levantamiento:</strong> ${escapeHtml(formatDateValue(state.projectMeta.surveyDate))}</span><span><strong>Responsable:</strong> ${escapeHtml(state.projectMeta.responsible || "No registrado")}</span><span><strong>Revisor:</strong> ${escapeHtml(state.projectMeta.reviewer || "No registrado")}</span><span><strong>Fecha de impresión:</strong> ${escapeHtml(formatDateValue(state.projectMeta.printDate || todayIsoDate()))}</span></div>
         <p class="technical-data"><strong>Formato:</strong> ${paperName}${paperOrientation} · <strong>Dimensiones:</strong> ${paperDimensions} · <strong>Escala:</strong> 1:${scale.selected} · <strong>Área principal:</strong> ${formatNumber(totalArea)} ${areaUnitSymbol()} · <strong>Perímetro principal:</strong> ${formatNumber(totalPerimeter)} ${unitSymbol()} · <strong>BM:</strong> E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p>
-        <div class="layout"><img class="plan-image" src="${image}" alt="Plano del levantamiento"><div><h2>Resumen por zonas</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows}</tbody></table></div></div>
+        <section class="zone-section"><h2>Resumen por zonas y terrenos</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows}</tbody></table></section>
         <h2 class="table-title">Puntos y resultados</h2>
         <table class="main-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead><tbody>${initialRow}${pointRows || '<tr><td colspan="22">No hay puntos calculados.</td></tr>'}</tbody></table>
         <div class="report-total">Perímetro del terreno principal: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
+      </section>
+    </main>
+    <main class="report-page graph-page">
+      <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
+      <section class="report-content graph-content">
+        <div class="graph-heading"><h1>Plano del terreno principal</h1><p class="graph-meta">${escapeHtml(mainZone?.name || "Terreno principal")} · Escala 1:${scale.selected} · E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p></div>
+        <img class="plan-image" src="${image}" alt="Plano ampliado del terreno principal">
       </section>
     </main>
   </body></html>`);
@@ -3026,16 +3025,6 @@ els.quickGrid.addEventListener("click", () => {
   state.showGrid = !state.showGrid;
   syncControls();
   update(false);
-});
-
-els.creditItems.forEach((item) => {
-  const index = Number(item.dataset.creditIndex);
-  item.querySelectorAll("[data-credit-field]").forEach((input) => {
-    input.addEventListener("input", () => {
-      credits[index][input.dataset.creditField] = input.value;
-      localStorage.setItem(CREDITS_KEY, JSON.stringify(credits));
-    });
-  });
 });
 
 els.canvas.addEventListener("wheel", (event) => {
