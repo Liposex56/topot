@@ -1506,6 +1506,16 @@ function axisWithinRange(min, max, anchorValue) {
   return { min, max, ticks };
 }
 
+function fittedAxis(minValue, maxValue, anchorValue, paddingRatio = 0.06) {
+  if (minValue === maxValue) {
+    minValue -= 5;
+    maxValue += 5;
+  }
+  const span = Math.max(1, maxValue - minValue);
+  const padding = Math.max(1, span * paddingRatio);
+  return axisWithinRange(minValue - padding, maxValue + padding, anchorValue);
+}
+
 function balancedAxes(eastAxis, northAxis, plotW, plotH, station) {
   const eastCenter = (eastAxis.min + eastAxis.max) / 2;
   const northCenter = (northAxis.min + northAxis.max) / 2;
@@ -1954,8 +1964,9 @@ function createTechnicalPlanCanvas(survey, options = {}) {
   const visiblePoints = survey.points.filter((point) => point.hasCoordinates && visibleZoneIds.has(point.zoneId));
   const eastValues = [station, ...visiblePoints].map((point) => point.east);
   const northValues = [station, ...visiblePoints].map((point) => point.north);
-  let eastAxis = niceAxis(Math.min(...eastValues), Math.max(...eastValues), station.east);
-  let northAxis = niceAxis(Math.min(...northValues), Math.max(...northValues), station.north);
+  const axisBuilder = options.tightFraming ? fittedAxis : niceAxis;
+  let eastAxis = axisBuilder(Math.min(...eastValues), Math.max(...eastValues), station.east);
+  let northAxis = axisBuilder(Math.min(...northValues), Math.max(...northValues), station.north);
   const margin = { left: 100, right: 55, top: 78, bottom: 85 };
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
@@ -2515,7 +2526,7 @@ function parseCsvLine(line) {
 
 function exportGraphImage() {
   const survey = computeSurvey();
-  const technicalCanvas = createTechnicalPlanCanvas(survey, { hideZoneLabels: true });
+  const technicalCanvas = createTechnicalPlanCanvas(survey, { hideZoneLabels: true, tightFraming: true });
   technicalCanvas.toBlob((blob) => {
     if (!blob) return;
     downloadFile(blob, `TOPORAY_${safeFileName(state.projectName)}_grafica.png`, "image/png");
@@ -2568,7 +2579,7 @@ function printReport() {
   const scale = drawingScaleDetails(survey);
   const mainZone = state.zones.find((zone) => zone.type === "polygon") || state.zones[0];
   const mainAnalysis = mainZone ? survey.analyses.get(mainZone.id) : null;
-  const image = createTechnicalPlanCanvas(survey, { hideZoneLabels: true }).toDataURL("image/png");
+  const image = createTechnicalPlanCanvas(survey, { hideZoneLabels: true, tightFraming: true }).toDataURL("image/png");
   const templateUrl = new URL("./assets/report-template.png", window.location.href).href;
   const segmentByPoint = reportSegments(survey);
   const validPoints = survey.points.filter((point) => point.hasCoordinates);
@@ -2581,7 +2592,7 @@ function printReport() {
     const analysis = survey.analyses.get(zone.id);
     return `<tr><td>${escapeHtml(zone.name)}</td><td>${escapeHtml(zoneTypeLabel(zone.type))}</td><td>${analysis.count}</td><td>${formatNumber(analysis.area)}</td><td>${formatNumber(analysis.measure)}</td></tr>`;
   }).join("");
-  const reportRows = validPoints.map((point) => {
+  const completeRows = validPoints.map((point) => {
     const zone = state.zones.find((item) => item.id === point.zoneId);
     const source = point.source;
     const bearing = bearingComponents(point.azimuth);
@@ -2590,25 +2601,17 @@ function printReport() {
     const southProjection = point.deltaNorth < 0 ? formatNumber(Math.abs(point.deltaNorth)) : "";
     const eastProjection = point.deltaEast >= 0 ? formatNumber(point.deltaEast) : "";
     const westProjection = point.deltaEast < 0 ? formatNumber(Math.abs(point.deltaEast)) : "";
-    return {
-      calculation: `<tr>
+    return `<tr>
       <td>${escapeHtml(point.id)}</td><td>${escapeHtml(zone?.name || "")}</td><td>${escapeHtml(point.description)}</td>
       <td>${formatPlainNumber(source.degrees, 0)}</td><td>${formatPlainNumber(source.minutes, 0)}</td><td>${formatPlainNumber(source.seconds, 3)}</td>
       <td>${formatNumber(point.distance)}</td><td>${formatNumber(Math.sin(point.radians), 6)}</td><td>${formatNumber(Math.cos(point.radians), 6)}</td>
       <td>${bearing.northSouth}</td><td>${bearing.degrees}</td><td>${bearing.minutes}</td><td>${formatPlainNumber(bearing.seconds, 3)}</td><td>${bearing.eastWest}</td>
-    </tr>`,
-      projection: `<tr>
-      <td>${escapeHtml(point.id)}</td><td>${escapeHtml(zone?.name || "")}</td><td>${escapeHtml(point.description)}</td>
       <td>${northProjection}</td><td>${southProjection}</td><td>${eastProjection}</td><td>${westProjection}</td>
       <td>${formatNumber(point.north)}</td><td>${formatNumber(point.east)}</td>
       <td>${segment ? formatNumber(segment.distance) : ""}</td><td>${segment ? escapeHtml(segment.label) : ""}</td>
-    </tr>`,
-    };
-  });
-  const calculationRows = reportRows.map((row) => row.calculation).join("");
-  const projectionRows = reportRows.map((row) => row.projection).join("");
-  const calculationInitialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="11"></td></tr>`;
-  const projectionInitialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="4"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
+    </tr>`;
+  }).join("");
+  const completeInitialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="15"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
   const popup = window.open("", "_blank", "width=1100,height=800");
   if (!popup) {
     showToast("El navegador bloqueó la ventana de impresión. Permita las ventanas emergentes e inténtelo de nuevo.", true);
@@ -2616,7 +2619,7 @@ function printReport() {
   }
   popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe_TOPORAY_${escapeHtml(safeFileName(state.projectName))}</title><style>
     @page{size:letter landscape;margin:0}
-    *{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff;break-after:page}.report-page::before{content:"Radiación simple";position:absolute;z-index:1;top:.95in;left:.98in;width:3.25in;height:.28in;padding-top:.02in;background:#fff;font-size:14px;font-weight:700;line-height:.24in}.report-page:last-of-type{break-after:auto}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:18px;margin:0 0 8px;line-height:1.15}h2{font-size:13px;margin:0 0 6px}.project-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 18px;margin-bottom:10px;font-size:11px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 12px;font-size:10px;line-height:1.45;color:#263840}.zone-section{margin-bottom:12px}.zone-table,.results-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:10.5px}.zone-table th,.zone-table td,.results-table th,.results-table td{border:.35px solid #111;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;background:#fff}.zone-table th,.zone-table td{padding:5px 6px;line-height:1.2}.zone-table th{font-weight:700}.zone-table td:first-child,.zone-table td:nth-child(2){text-align:left}.summary-metrics{display:grid;grid-template-columns:1.35fr repeat(3,1fr);border:.35px solid #111;margin-top:12px}.summary-metric{min-width:0;padding:9px 10px;border-right:.35px solid #111}.summary-metric:last-child{border-right:0}.summary-metric span{display:block;margin-bottom:3px;font-size:8.5px;text-transform:uppercase;color:#4a5960}.summary-metric strong{display:block;font-size:13px;overflow-wrap:anywhere}.page-subtitle{margin:-3px 0 10px;font-size:10.5px;color:#43535b}.results-table{font-size:10.2px}.projection-table{font-size:10.8px}.results-table th,.results-table td{padding:4px 3px;line-height:1.15}.results-table thead th{font-weight:700}.results-table thead tr:first-child th{font-size:10.5px}.results-table td:nth-child(2),.results-table td:nth-child(3){text-align:left}.calculation-table th:nth-child(2),.calculation-table td:nth-child(2){width:12%}.calculation-table th:nth-child(3),.calculation-table td:nth-child(3){width:15%}.projection-table th:nth-child(2),.projection-table td:nth-child(2){width:15%}.projection-table th:nth-child(3),.projection-table td:nth-child(3){width:18%}.initial-row td{height:23px;font-weight:600}.report-total{margin-top:8px;text-align:right;font-size:11px;font-weight:700}.graph-content{display:flex;flex-direction:column}.graph-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:7px}.graph-heading h1{margin:0}.graph-meta{margin:0;color:#263840;font-size:9px;text-align:right}.plan-image{display:block;width:100%;height:5.42in;border:.35px solid #111;object-fit:contain;background:#fff}@media screen{html,body{width:auto;min-height:100%;background:#dfe5e7}body{display:grid;gap:16px;padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{display:block;padding:0}.report-page{margin:0}}
+    *{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff;break-after:page}.report-page::before{content:"Radiación simple";position:absolute;z-index:1;top:.95in;left:.98in;width:3.25in;height:.28in;padding-top:.02in;background:#fff;font-size:14px;font-weight:700;line-height:.24in}.report-page:last-of-type{break-after:auto}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:18px;margin:0 0 8px;line-height:1.15}h2{font-size:13px;margin:0 0 6px}.project-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 18px;margin-bottom:10px;font-size:11px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 12px;font-size:10px;line-height:1.45;color:#263840}.zone-section{margin-bottom:12px}.zone-table,.results-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:10.5px}.zone-table th,.zone-table td,.results-table th,.results-table td{border:.35px solid #111;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;background:#fff}.zone-table th,.zone-table td{padding:5px 6px;line-height:1.2}.zone-table th{font-weight:700}.zone-table td:first-child,.zone-table td:nth-child(2){text-align:left}.summary-metrics{display:grid;grid-template-columns:1.35fr repeat(3,1fr);border:.35px solid #111;margin-top:12px}.summary-metric{min-width:0;padding:9px 10px;border-right:.35px solid #111}.summary-metric:last-child{border-right:0}.summary-metric span{display:block;margin-bottom:3px;font-size:8.5px;text-transform:uppercase;color:#4a5960}.summary-metric strong{display:block;font-size:13px;overflow-wrap:anywhere}.page-subtitle{margin:-3px 0 9px;font-size:10.5px;color:#43535b}.results-page .report-content{right:.38in;left:.38in}.results-table{font-family:"Arial Narrow",Arial,sans-serif;font-size:8.6px;line-height:1.08}.results-table th,.results-table td{border:.3px solid #111;padding:3px 1px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;background:#fff}.results-table thead th{font-size:8.4px;font-weight:700}.results-table td:nth-child(2),.results-table td:nth-child(3){text-align:left}.initial-row td{height:21px;font-weight:600}.report-total{margin-top:7px;text-align:right;font-size:10px;font-weight:700}.graph-page .report-content{top:1.28in;right:.44in;bottom:1.02in;left:.44in}.graph-content{display:flex;flex-direction:column}.graph-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:6px}.graph-heading h1{margin:0}.graph-meta{margin:0;color:#263840;font-size:9px;text-align:right}.plan-image{display:block;width:100%;height:5.72in;border:.35px solid #111;object-fit:contain;background:#fff}@media screen{html,body{width:auto;min-height:100%;background:#dfe5e7}body{display:grid;gap:16px;padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{display:block;padding:0}.report-page{margin:0}}
   </style></head><body><button class="print-command" onclick="window.print()">Imprimir o guardar como PDF</button>
     <main class="report-page summary-page">
       <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
@@ -2628,20 +2631,16 @@ function printReport() {
         <div class="summary-metrics"><div class="summary-metric"><span>Terreno principal</span><strong>${escapeHtml(mainZone?.name || "No registrado")}</strong></div><div class="summary-metric"><span>Puntos calculados</span><strong>${validPoints.length}</strong></div><div class="summary-metric"><span>Área principal</span><strong>${formatNumber(totalArea)} ${areaUnitSymbol()}</strong></div><div class="summary-metric"><span>Perímetro principal</span><strong>${formatNumber(totalPerimeter)} ${unitSymbol()}</strong></div></div>
       </section>
     </main>
-    <main class="report-page calculation-page">
+    <main class="report-page results-page">
       <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
       <section class="report-content">
-        <h1>Puntos y resultados I</h1>
-        <p class="page-subtitle">Observaciones, azimut, razones trigonométricas y rumbo.</p>
-        <table class="results-table calculation-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th></tr></thead><tbody>${calculationInitialRow}${calculationRows || '<tr><td colspan="14">No hay puntos calculados.</td></tr>'}</tbody></table>
-      </section>
-    </main>
-    <main class="report-page projection-page">
-      <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
-      <section class="report-content">
-        <h1>Puntos y resultados II</h1>
-        <p class="page-subtitle">Proyecciones, coordenadas topográficas y perímetro.</p>
-        <table class="results-table projection-table"><thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead><tbody>${projectionInitialRow}${projectionRows || '<tr><td colspan="11">No hay puntos calculados.</td></tr>'}</tbody></table>
+        <h1>Puntos y resultados</h1>
+        <p class="page-subtitle">Informe completo: observaciones, azimut, rumbo, proyecciones, coordenadas y perímetro.</p>
+        <table class="results-table complete-table">
+          <colgroup><col style="width:3%"><col style="width:7%"><col style="width:9%"><col style="width:3%"><col style="width:2.5%"><col style="width:3.5%"><col style="width:4.5%"><col style="width:5%"><col style="width:5%"><col style="width:2.6%"><col style="width:2.8%"><col style="width:2.5%"><col style="width:3.5%"><col style="width:2.6%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:9.5%"></colgroup>
+          <thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead>
+          <tbody>${completeInitialRow}${completeRows || '<tr><td colspan="22">No hay puntos calculados.</td></tr>'}</tbody>
+        </table>
         <div class="report-total">Perímetro del terreno principal: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
       </section>
     </main>
