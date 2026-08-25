@@ -3,6 +3,16 @@ const PROJECTS_KEY = "levantamientos-topograficos-projects-v1";
 const CURRENT_PROJECT_KEY = "levantamientos-topograficos-current-project-v1";
 const HISTORY_LIMIT = 60;
 const ZONE_COLORS = ["#0b6b5d", "#2962a3", "#d36b22", "#6d7378", "#8a4f9e", "#b13f4b"];
+const PAPER_FORMATS = {
+  A0: { width: 841, height: 1189 },
+  A1: { width: 594, height: 841 },
+  A2: { width: 420, height: 594 },
+  A3: { width: 297, height: 420 },
+  A4: { width: 210, height: 297 },
+};
+const DRAWING_SCALES = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
+const PAPER_MARGIN_MM = 10;
+const TITLE_BLOCK_MM = 35;
 
 const els = {
   stationEast: document.querySelector("#stationEast"),
@@ -19,7 +29,6 @@ const els = {
   center: document.querySelector("#centerBtn"),
   zoomIn: document.querySelector("#zoomInBtn"),
   zoomOut: document.querySelector("#zoomOutBtn"),
-  sample: document.querySelector("#sampleBtn"),
   exportCsv: document.querySelector("#exportBtn"),
   exportProcess: document.querySelector("#exportProcessBtn"),
   exportTxt: document.querySelector("#exportTxtBtn"),
@@ -64,21 +73,36 @@ const els = {
   quickLines: document.querySelector("#quickLinesBtn"),
   quickGrid: document.querySelector("#quickGridBtn"),
   selectedPointStatus: document.querySelector("#selectedPointStatus"),
+  paperFormat: document.querySelector("#paperFormatSelect"),
+  paperOrientation: document.querySelector("#paperOrientationSelect"),
+  drawingScaleMode: document.querySelector("#drawingScaleModeSelect"),
+  drawingScale: document.querySelector("#drawingScaleSelect"),
+  drawingScaleInfo: document.querySelector("#drawingScaleInfo"),
+  customPaperFields: document.querySelector("#customPaperFields"),
+  customPaperWidth: document.querySelector("#customPaperWidth"),
+  customPaperHeight: document.querySelector("#customPaperHeight"),
+  distanceHeader: document.querySelector("#distanceHeader"),
   pointSearch: document.querySelector("#pointSearch"),
   pointZoneFilter: document.querySelector("#pointZoneFilter"),
   pointStatusFilter: document.querySelector("#pointStatusFilter"),
   clearPointFilters: document.querySelector("#clearPointFiltersBtn"),
   pointsEmptyState: document.querySelector("#pointsEmptyState"),
+  sortPoints: document.querySelector("#sortPointsBtn"),
   calculationZoneFilter: document.querySelector("#calculationZoneFilter"),
   calculationPointFilter: document.querySelector("#calculationPointFilter"),
   calculationsContent: document.querySelector("#calculationsContent"),
   projectsViewList: document.querySelector("#projectsViewList"),
   duplicateProject: document.querySelector("#duplicateProjectBtn"),
+  projectResponsible: document.querySelector("#projectResponsible"),
+  projectSurveyDate: document.querySelector("#projectSurveyDate"),
+  projectReviewer: document.querySelector("#projectReviewer"),
+  projectPrintDate: document.querySelector("#projectPrintDate"),
+  projectStationEast: document.querySelector("#projectStationEast"),
+  projectStationNorth: document.querySelector("#projectStationNorth"),
   units: document.querySelector("#unitsSelect"),
   gridSize: document.querySelector("#gridSizeSelect"),
   appearance: document.querySelector("#appearanceSelect"),
   showPointNumbers: document.querySelector("#showPointNumbers"),
-  autoClosePolygons: document.querySelector("#autoClosePolygons"),
   pointDialog: document.querySelector("#pointDialog"),
   pointForm: document.querySelector("#pointForm"),
   pointDialogTitle: document.querySelector("#pointDialogTitle"),
@@ -96,6 +120,10 @@ const els = {
   newProjectDialog: document.querySelector("#newProjectDialog"),
   newProjectForm: document.querySelector("#newProjectForm"),
   newProjectName: document.querySelector("#newProjectName"),
+  newProjectResponsible: document.querySelector("#newProjectResponsible"),
+  newProjectSurveyDate: document.querySelector("#newProjectSurveyDate"),
+  newProjectReviewer: document.querySelector("#newProjectReviewer"),
+  newProjectPrintDate: document.querySelector("#newProjectPrintDate"),
   newProjectEast: document.querySelector("#newProjectEast"),
   newProjectNorth: document.querySelector("#newProjectNorth"),
   cancelNewProject: document.querySelector("#cancelNewProjectBtn"),
@@ -149,7 +177,7 @@ function createZone(overrides = {}) {
     type,
     description: String(overrides.description || ""),
     visible: overrides.visible !== false,
-    closed: type === "polygon" ? overrides.closed !== false : false,
+    closed: type === "polygon",
     reference: {
       type: ["station", "point", "custom"].includes(overrides.reference?.type)
         ? overrides.reference.type
@@ -180,6 +208,7 @@ function createBlankState(projectName = "Levantamiento sin nombre") {
     version: 2,
     projectName,
     modifiedAt: new Date().toISOString(),
+    projectMeta: { responsible: "", surveyDate: "", reviewer: "", printDate: todayIsoDate() },
     station: { east: 1000, north: 1000 },
     mode: "radiacion",
     showPoints: true,
@@ -187,12 +216,12 @@ function createBlankState(projectName = "Levantamiento sin nombre") {
     showGrid: true,
     showZoneNames: true,
     showPointNumbers: true,
-    autoClosePolygons: true,
     units: "m",
     gridSize: 0,
     appearance: "dark",
     axisDecimals: 0,
     view: { zoom: 1, panEast: 0, panNorth: 0 },
+    drawingScale: { paper: "A3", orientation: "horizontal", mode: "auto", denominator: 500, customWidth: 420, customHeight: 297 },
     zones: [mainZone],
     activeZoneId: mainZone.id,
     observations: [defaultObservation(1, mainZone.id)],
@@ -234,6 +263,12 @@ function migrateState(rawState) {
     version: 2,
     projectName: normalizeProjectName(raw.projectName),
     modifiedAt: typeof raw.modifiedAt === "string" ? raw.modifiedAt : fallback.modifiedAt,
+    projectMeta: {
+      responsible: String(raw.projectMeta?.responsible || ""),
+      surveyDate: String(raw.projectMeta?.surveyDate || ""),
+      reviewer: String(raw.projectMeta?.reviewer || ""),
+      printDate: String(raw.projectMeta?.printDate || fallback.projectMeta.printDate),
+    },
     station: {
       east: toNumber(raw.station?.east ?? fallback.station.east),
       north: toNumber(raw.station?.north ?? fallback.station.north),
@@ -244,7 +279,6 @@ function migrateState(rawState) {
     showGrid: raw.showGrid !== false,
     showZoneNames: raw.showZoneNames !== false,
     showPointNumbers: raw.showPointNumbers !== false,
-    autoClosePolygons: raw.autoClosePolygons !== false,
     units: raw.units === "ft" ? "ft" : "m",
     gridSize: [0, 1, 5, 10, 25, 50, 100].includes(Number(raw.gridSize)) ? Number(raw.gridSize) : 0,
     appearance: raw.appearance === "light" ? "light" : "dark",
@@ -253,6 +287,18 @@ function migrateState(rawState) {
       zoom: clampNumber(raw.view?.zoom || 1, 0.5, 20),
       panEast: toNumber(raw.view?.panEast),
       panNorth: toNumber(raw.view?.panNorth),
+    },
+    drawingScale: {
+      paper: raw.drawingScale?.paper === "CUSTOM" || PAPER_FORMATS[raw.drawingScale?.paper]
+        ? raw.drawingScale.paper
+        : fallback.drawingScale.paper,
+      orientation: raw.drawingScale?.orientation === "vertical" ? "vertical" : "horizontal",
+      mode: raw.drawingScale?.mode === "manual" ? "manual" : "auto",
+      denominator: DRAWING_SCALES.includes(Number(raw.drawingScale?.denominator))
+        ? Number(raw.drawingScale.denominator)
+        : fallback.drawingScale.denominator,
+      customWidth: clampNumber(raw.drawingScale?.customWidth || fallback.drawingScale.customWidth, 50, 5000),
+      customHeight: clampNumber(raw.drawingScale?.customHeight || fallback.drawingScale.customHeight, 50, 5000),
     },
     zones,
     activeZoneId,
@@ -271,6 +317,18 @@ function clampNumber(value, min, max) {
 
 function normalizeProjectName(name) {
   return String(name || "").trim() || "Levantamiento sin nombre";
+}
+
+function todayIsoDate() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function formatDateValue(value) {
+  if (!value) return "No registrada";
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("es-CO");
 }
 
 function normalizeObservation(observation) {
@@ -736,18 +794,37 @@ function openPointDialog(index = null) {
   }, 0);
 }
 
+function rejectPointValue(input, message) {
+  input.setCustomValidity(message);
+  input.reportValidity();
+  input.focus();
+  showToast(message, true);
+}
+
+function clearPointValidity() {
+  [els.pointDegrees, els.pointMinutes, els.pointSeconds, els.pointDistance].forEach((input) => input.setCustomValidity(""));
+}
+
 function savePointFromDialog() {
+  clearPointValidity();
   const id = els.pointNumber.value.replace(/[^0-9]/g, "");
   const degrees = Number(els.pointDegrees.value);
   const minutes = Number(els.pointMinutes.value);
   const seconds = Number(els.pointSeconds.value);
   const distance = Number(els.pointDistance.value);
   if (!isPositiveInteger(id)) return showToast("El n\u00famero del punto debe ser un entero positivo.", true);
-  if (!Number.isFinite(degrees) || degrees < 0 || degrees > 360) return showToast("Los grados deben estar entre 0 y 360.", true);
-  if (!Number.isFinite(minutes) || minutes < 0 || minutes >= 60) return showToast("Los minutos deben ser menores que 60.", true);
-  if (!Number.isFinite(seconds) || seconds < 0 || seconds >= 60) return showToast("Los segundos deben ser menores que 60.", true);
+  if (!Number.isFinite(degrees)) return rejectPointValue(els.pointDegrees, "Ingrese un valor válido.");
+  if (degrees < 0) return rejectPointValue(els.pointDegrees, "El valor debe ser mayor o igual a 0.");
+  if (degrees > 360) return rejectPointValue(els.pointDegrees, "El valor debe ser menor o igual a 360.");
+  if (!Number.isFinite(minutes)) return rejectPointValue(els.pointMinutes, "Ingrese un valor válido.");
+  if (minutes < 0) return rejectPointValue(els.pointMinutes, "El valor debe ser mayor o igual a 0.");
+  if (minutes >= 60) return rejectPointValue(els.pointMinutes, "El valor debe ser menor a 60.");
+  if (!Number.isFinite(seconds)) return rejectPointValue(els.pointSeconds, "Ingrese un valor válido.");
+  if (seconds < 0) return rejectPointValue(els.pointSeconds, "El valor debe ser mayor o igual a 0.");
+  if (seconds >= 60) return rejectPointValue(els.pointSeconds, "El valor debe ser menor a 60.");
   if (degrees === 360 && (minutes !== 0 || seconds !== 0)) return showToast("Con 360 grados, minutos y segundos deben ser 0.", true);
-  if (!Number.isFinite(distance) || distance <= 0) return showToast("La distancia debe ser mayor que 0.", true);
+  if (!Number.isFinite(distance)) return rejectPointValue(els.pointDistance, "Ingrese un valor válido.");
+  if (distance < 0) return rejectPointValue(els.pointDistance, "El valor debe ser mayor o igual a 0.");
   const reusableIndex = editingPointIndex === null
     ? state.observations.findIndex((observation) =>
         observation.zoneId === els.pointZone.value && !hasMeasurementData(observation) && Number(observation.id) === Number(id)
@@ -904,7 +981,8 @@ function wireRowActions(row, index) {
   edit.setAttribute("aria-label", "Editar punto");
   edit.addEventListener("click", () => openPointDialog(index));
   row.querySelector(".row-actions").insertBefore(edit, row.querySelector('[data-action="delete"]'));
-  row.querySelector('[data-action="delete"]').addEventListener("click", () => {
+  const clear = row.querySelector('[data-action="delete"]');
+  clear.addEventListener("click", () => {
     pushHistory();
     state.observations[index] = {
       ...defaultObservation(observation.id || nextPointNumber(observation.zoneId), observation.zoneId),
@@ -914,6 +992,14 @@ function wireRowActions(row, index) {
     update(true);
     showToast("Se limpiaron los valores del punto. Puede recuperarlos con Deshacer.");
   });
+  const permanentDelete = document.createElement("button");
+  permanentDelete.type = "button";
+  permanentDelete.className = "delete-button";
+  permanentDelete.textContent = "⌫";
+  permanentDelete.title = "Eliminar punto definitivamente";
+  permanentDelete.setAttribute("aria-label", "Eliminar punto definitivamente");
+  permanentDelete.addEventListener("click", () => deleteObservation(index));
+  row.querySelector(".row-actions").appendChild(permanentDelete);
 }
 
 function moveObservation(index, direction) {
@@ -929,6 +1015,40 @@ function moveObservation(index, direction) {
   renumberZone(zoneId);
   update(true);
   showToast("Puntos reordenados y numeración actualizada.");
+}
+
+function sortObservations() {
+  if (state.observations.length < 2) return;
+  const zoneOrder = new Map(state.zones.map((zone, index) => [zone.id, index]));
+  pushHistory();
+  state.observations = state.observations
+    .map((observation, index) => ({ observation, index }))
+    .sort((left, right) => {
+      const zoneDifference = (zoneOrder.get(left.observation.zoneId) ?? 0) - (zoneOrder.get(right.observation.zoneId) ?? 0);
+      if (zoneDifference) return zoneDifference;
+      const numberDifference = Number(left.observation.id || 0) - Number(right.observation.id || 0);
+      return numberDifference || left.index - right.index;
+    })
+    .map(({ observation }) => observation);
+  update(true);
+  showToast("Los puntos se ordenaron por zona y número.");
+}
+
+function deleteObservation(index) {
+  const observation = state.observations[index];
+  if (!observation) return;
+  const zone = state.zones.find((item) => item.id === observation.zoneId);
+  const label = observation.id || index + 1;
+  if (!window.confirm(`¿Eliminar definitivamente el punto ${label}${zone ? ` de "${zone.name}"` : ""}?`)) return;
+  pushHistory();
+  state.observations.splice(index, 1);
+  renumberZone(observation.zoneId);
+  if (zone?.type === "polygon") zone.closed = true;
+  if (selectedPointUid === observation.uid) selectedPointUid = null;
+  update(true);
+  showToast(zone?.type === "polygon"
+    ? "Punto eliminado definitivamente. El polígono se volvió a cerrar con los puntos restantes."
+    : "Punto eliminado definitivamente.");
 }
 
 function applyRowOutputs(row, survey, index) {
@@ -1118,28 +1238,33 @@ function renderCalculations(survey) {
     if (pointFilter && !rows.length) return "";
     const rowHtml = rows.map(({ point, index }) => {
       const source = state.observations[index];
-      const errors = [...new Set(Object.values(survey.rowErrors[index]).flat())];
       const gms = `${formatPlainNumber(source.degrees, 0)}\u00b0 ${formatPlainNumber(source.minutes, 0)}' ${formatPlainNumber(source.seconds, 3)}\"`;
+      const details = [];
+      if (zone?.name) details.push(zone.name);
+      else if (point.description) details.push("Sin zona");
+      if (point.description) details.push(point.description);
+      const title = `Punto ${point.id || "-"}${details.length ? ` (${details.join(", ")})` : ""}`;
+      const value = (number, suffix = "") => point.hasCoordinates ? `${formatNumber(number)}${suffix}` : "-";
       return `<tr>
-        <td>${escapeHtml(point.id || "-")}</td><td>${escapeHtml(gms)}</td>
-        <td>${point.hasCoordinates ? `${formatNumber(point.azimuth)}\u00b0` : "-"}</td>
+        <td>${escapeHtml(title)}</td>
+        <td>${escapeHtml(gms)}</td>
+        <td>${value(point.distance, ` ${unitSymbol()}`)}</td>
+        <td>${value(point.azimuth, "\u00b0")}</td>
         <td>${point.hasCoordinates ? escapeHtml(point.bearing) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.deltaEast) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.deltaNorth) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.east) : "-"}</td>
-        <td>${point.hasCoordinates ? formatNumber(point.north) : "-"}</td>
-        <td>${escapeHtml(point.status)}</td><td>${escapeHtml(errors.join(" ") || "Sin errores")}</td>
+        <td>${value(point.deltaEast, ` ${unitSymbol()}`)}</td>
+        <td>${value(point.deltaNorth, ` ${unitSymbol()}`)}</td>
+        <td>${value(point.east)}</td>
+        <td>${value(point.north)}</td>
       </tr>`;
     }).join("");
     const area = zone.type === "polygon" ? `<span>Area: ${formatNumber(analysis.area)} ${areaUnitSymbol()}</span>` : "";
     const measure = zone.type !== "points" ? `<span>${zone.type === "line" ? "Longitud" : "Perimetro"}: ${formatNumber(analysis.measure)} ${unitSymbol()}</span>` : "";
-    const closure = zone.type === "polygon" ? (zone.closed ? "figura cerrada" : "figura abierta") : "no aplica";
     return `<section class="calculation-zone" style="--zone-color:${escapeHtml(zone.color)}">
-      <div class="calculation-zone-heading"><h2>${escapeHtml(zone.name)}</h2><span class="zone-status ${analysis.statusClass}">${escapeHtml(analysis.status)}</span></div>
-      <div class="calculation-summary"><span>${escapeHtml(zoneTypeLabel(zone.type))}</span><span>${analysis.count} puntos validos</span>${area}${measure}<span>Cierre: ${closure}</span></div>
+      <div class="calculation-zone-heading"><h2>${escapeHtml(zone.name)}</h2></div>
+      <div class="calculation-summary"><span>${escapeHtml(zoneTypeLabel(zone.type))}</span><span>${analysis.count} puntos</span>${area}${measure}</div>
       <div class="calculation-table-wrap"><table class="calculation-table"><thead><tr>
-        <th>Punto</th><th>GMS</th><th>Azimut decimal</th><th>Rumbo</th><th>Proy. Este</th><th>Proy. Norte</th><th>Coord. Este</th><th>Coord. Norte</th><th>Estado</th><th>Errores</th>
-      </tr></thead><tbody>${rowHtml || '<tr><td colspan="10">No hay observaciones para mostrar.</td></tr>'}</tbody></table></div>
+        <th>Identificación</th><th>GMS</th><th>Distancia</th><th>Azimut decimal</th><th>Rumbo</th><th>Proy. Este</th><th>Proy. Norte</th><th>Coord. Este</th><th>Coord. Norte</th>
+      </tr></thead><tbody>${rowHtml || '<tr><td colspan="9">No hay observaciones para mostrar.</td></tr>'}</tbody></table></div>
     </section>`;
   }).filter(Boolean).join("");
   els.calculationsContent.innerHTML = sections || '<p class="empty-state">No hay calculos que coincidan con los filtros.</p>';
@@ -1315,9 +1440,9 @@ function saveZoneFromDialog() {
   if (editingZoneId) {
     const index = state.zones.findIndex((zone) => zone.id === editingZoneId);
     const previous = state.zones[index];
-    state.zones[index] = createZone({ ...previous, ...values, id: previous.id, closed: values.type === "polygon" ? previous.closed : false });
+    state.zones[index] = createZone({ ...previous, ...values, id: previous.id });
   } else {
-    const zone = createZone({ ...values, closed: values.type === "polygon" && state.autoClosePolygons });
+    const zone = createZone(values);
     state.zones.push(zone);
     state.activeZoneId = zone.id;
   }
@@ -1381,6 +1506,16 @@ function axisWithinRange(min, max, anchorValue) {
   return { min, max, ticks };
 }
 
+function fittedAxis(minValue, maxValue, anchorValue, paddingRatio = 0.06) {
+  if (minValue === maxValue) {
+    minValue -= 5;
+    maxValue += 5;
+  }
+  const span = Math.max(1, maxValue - minValue);
+  const padding = Math.max(1, span * paddingRatio);
+  return axisWithinRange(minValue - padding, maxValue + padding, anchorValue);
+}
+
 function balancedAxes(eastAxis, northAxis, plotW, plotH, station) {
   const eastCenter = (eastAxis.min + eastAxis.max) / 2;
   const northCenter = (northAxis.min + northAxis.max) / 2;
@@ -1441,7 +1576,7 @@ function drawPlot(survey) {
   const colors = plotColors();
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, width, height);
-  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height);
+  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors);
 
   state.zones.forEach((zone) => {
     if (!zone.visible) return;
@@ -1456,16 +1591,17 @@ function drawPlot(survey) {
         state.showPointNumbers ? point.id : "",
         displayColor,
         false,
-        point.uid === selectedPointUid
+        point.uid === selectedPointUid,
+        colors
       ));
     }
-    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y);
+    if (state.showZoneNames && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
   });
 
   drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH);
-  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true);
-  drawStationCoords(ctx, x(station.east), y(station.north), station);
-  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin);
+  drawPoint(ctx, x(station.east), y(station.north), station.id, "#c64f32", true, false, colors);
+  drawStationCoords(ctx, x(station.east), y(station.north), station, colors);
+  drawLegend(ctx, state.zones.filter((zone) => zone.visible), survey, width, margin, colors);
 
   ctx.fillStyle = colors.text;
   ctx.font = "700 12px Segoe UI, Arial";
@@ -1473,7 +1609,14 @@ function drawPlot(survey) {
   ctx.fillText("Norte (N)", margin.left, 16);
 }
 
-function plotColors() {
+function plotColors(forceWhite = false) {
+  if (forceWhite) {
+    return {
+      background: "#ffffff", grid: "rgba(67, 105, 120, 0.2)", muted: "#536973", axis: "#718690",
+      text: "#263840", pointStroke: "#ffffff", labelBackground: "rgba(255, 255, 255, 0.94)",
+      legendBackground: "rgba(255, 255, 255, 0.96)", legendText: "#263840", exportMode: true,
+    };
+  }
   return state.appearance === "light"
     ? {
         background: "#f7fafb", grid: "rgba(67, 105, 120, 0.2)", muted: "#536973", axis: "#718690",
@@ -1487,20 +1630,20 @@ function plotColors() {
       };
 }
 
-function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height) {
-  const colors = plotColors();
+function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors = plotColors()) {
+  const exportMode = colors.exportMode === true;
   if (state.showGrid) {
     ctx.strokeStyle = colors.grid;
     ctx.fillStyle = colors.muted;
-    ctx.lineWidth = 1;
-    ctx.font = "11px Segoe UI, Arial";
+    ctx.lineWidth = exportMode ? 0.65 : 1;
+    ctx.font = `${exportMode ? 18 : 12}px Segoe UI, Arial`;
     eastAxis.ticks.forEach((value) => {
       const px = x(value);
       ctx.beginPath();
       ctx.moveTo(px, margin.top);
       ctx.lineTo(px, margin.top + plotH);
       ctx.stroke();
-      ctx.fillText(formatNumber(value, state.axisDecimals), px - 18, height - 25);
+      ctx.fillText(formatNumber(value, state.axisDecimals), px - (exportMode ? 28 : 18), height - (exportMode ? 34 : 25));
     });
     northAxis.ticks.forEach((value) => {
       const py = y(value);
@@ -1508,11 +1651,11 @@ function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, h
       ctx.moveTo(margin.left, py);
       ctx.lineTo(margin.left + plotW, py);
       ctx.stroke();
-      ctx.fillText(formatNumber(value, state.axisDecimals), 8, py + 4);
+      ctx.fillText(formatNumber(value, state.axisDecimals), exportMode ? 10 : 8, py + (exportMode ? 6 : 4));
     });
   }
   ctx.strokeStyle = colors.axis;
-  ctx.lineWidth = 1.3;
+  ctx.lineWidth = exportMode ? 1 : 1.3;
   ctx.beginPath();
   ctx.moveTo(margin.left, margin.top + plotH);
   ctx.lineTo(margin.left + plotW, margin.top + plotH);
@@ -1521,10 +1664,12 @@ function drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, h
   ctx.stroke();
 }
 
-function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
+function drawZoneGeometry(ctx, analysis, zone, color, x, y, exportMode = false) {
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.lineWidth = analysis.status === "Con errores" ? 3 : 2.4;
+  ctx.lineWidth = exportMode
+    ? (analysis.status === "Con errores" ? 1.4 : 0.9)
+    : (analysis.status === "Con errores" ? 2.2 : 1.6);
   if (analysis.status === "Con errores") ctx.setLineDash([8, 5]);
   analysis.segments.forEach((segment) => {
     if (segment.length < 2) return;
@@ -1535,7 +1680,7 @@ function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
     });
     if (zone.type === "polygon" && zone.closed && analysis.complete && segment.length === analysis.points.length) {
       ctx.closePath();
-      ctx.globalAlpha = 0.1;
+      ctx.globalAlpha = exportMode ? 0.055 : 0.1;
       ctx.fillStyle = color;
       ctx.fill();
       ctx.globalAlpha = 1;
@@ -1545,8 +1690,8 @@ function drawZoneGeometry(ctx, analysis, zone, color, x, y) {
   ctx.restore();
 }
 
-function drawPoint(ctx, x, y, label, color, station = false, selected = false) {
-  const colors = plotColors();
+function drawPoint(ctx, x, y, label, color, station = false, selected = false, colors = plotColors(), labelPlacement = null) {
+  const exportMode = colors.exportMode === true;
   if (selected) {
     ctx.strokeStyle = "#f2c94c";
     ctx.lineWidth = 3;
@@ -1556,20 +1701,55 @@ function drawPoint(ctx, x, y, label, color, station = false, selected = false) {
   }
   ctx.fillStyle = color;
   ctx.strokeStyle = colors.pointStroke;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = exportMode ? 1.4 : 2.5;
   ctx.beginPath();
-  ctx.arc(x, y, station ? 7 : 5.5, 0, Math.PI * 2);
+  ctx.arc(x, y, station ? (exportMode ? 9 : 7) : (exportMode ? 7 : 5.5), 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = colors.text;
-  ctx.font = "700 11px Segoe UI, Arial";
-  if (label) ctx.fillText(String(label), x + 8, y - 8);
+  ctx.font = `700 ${exportMode ? 22 : 13}px Segoe UI, Arial`;
+  if (label) {
+    const labelX = x + (labelPlacement?.dx ?? (exportMode ? 11 : 8));
+    const labelY = y + (labelPlacement?.dy ?? (exportMode ? -11 : -8));
+    ctx.save();
+    ctx.textAlign = labelPlacement?.align || "left";
+    if (exportMode) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.98)";
+      ctx.lineWidth = 5;
+      ctx.lineJoin = "round";
+      ctx.strokeText(String(label), labelX, labelY);
+      ctx.fillStyle = colors.text;
+    }
+    ctx.fillText(String(label), labelX, labelY);
+    ctx.restore();
+  }
 }
 
-function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
+function outwardPointLabelPlacement(point, index, analysis, x, y) {
+  const center = analysis.points.reduce(
+    (sum, item) => ({ x: sum.x + x(item.east), y: sum.y + y(item.north) }),
+    { x: 0, y: 0 }
+  );
+  center.x /= analysis.points.length;
+  center.y /= analysis.points.length;
+  let dx = x(point.east) - center.x;
+  let dy = y(point.north) - center.y;
+  if (Math.hypot(dx, dy) < 2) {
+    const angle = (index / Math.max(analysis.points.length, 1)) * Math.PI * 2 - Math.PI / 2;
+    dx = Math.cos(angle);
+    dy = Math.sin(angle);
+  }
+  return {
+    dx: dx >= 0 ? 14 : -14,
+    dy: dy >= 0 ? 29 : -14,
+    align: dx >= 0 ? "left" : "right",
+  };
+}
+
+function drawStationGuides(ctx, x, y, margin, plotW, plotH, exportMode = false) {
   ctx.save();
   ctx.strokeStyle = "rgba(239, 107, 94, 0.66)";
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = exportMode ? 0.75 : 1.2;
   ctx.setLineDash([5, 5]);
   ctx.beginPath();
   ctx.moveTo(x, y);
@@ -1580,13 +1760,33 @@ function drawStationGuides(ctx, x, y, margin, plotW, plotH) {
   ctx.restore();
 }
 
-function drawStationCoords(ctx, x, y, station) {
-  ctx.fillStyle = plotColors().text;
-  ctx.font = "700 11px Segoe UI, Arial";
-  ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 9, y + 13);
+function drawStationCoords(ctx, x, y, station, colors = plotColors()) {
+  const exportMode = colors.exportMode === true;
+  ctx.fillStyle = colors.text;
+  ctx.font = `700 ${exportMode ? 20 : 13}px Segoe UI, Arial`;
+  ctx.fillText(`E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`, x + 10, y + (exportMode ? 22 : 13));
 }
 
-function drawZoneName(ctx, analysis, zone, x, y) {
+function drawTechnicalStationSummary(ctx, station, margin, colors) {
+  const dotX = margin.left + 190;
+  const textY = 34;
+  ctx.save();
+  ctx.fillStyle = "#c64f32";
+  ctx.beginPath();
+  ctx.arc(dotX, textY - 5, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = colors.text;
+  ctx.font = "700 18px Segoe UI, Arial";
+  ctx.fillText(
+    `BM - Punto de referencia · E ${formatCoordinate(station.east)} / N ${formatCoordinate(station.north)}`,
+    dotX + 13,
+    textY
+  );
+  ctx.restore();
+}
+
+function drawZoneName(ctx, analysis, zone, x, y, colors = plotColors()) {
+  const exportMode = colors.exportMode === true;
   const center = analysis.points.reduce(
     (sum, point) => ({ east: sum.east + point.east, north: sum.north + point.north }),
     { east: 0, north: 0 }
@@ -1595,40 +1795,42 @@ function drawZoneName(ctx, analysis, zone, x, y) {
   center.north /= analysis.points.length;
   const label = zone.name;
   ctx.save();
-  ctx.font = "700 12px Segoe UI, Arial";
-  const width = ctx.measureText(label).width + 12;
+  ctx.font = `700 ${exportMode ? 20 : 13}px Segoe UI, Arial`;
+  const width = ctx.measureText(label).width + (exportMode ? 18 : 12);
   const px = x(center.east) - width / 2;
-  const py = y(center.north) - 10;
-  ctx.fillStyle = plotColors().labelBackground;
-  ctx.fillRect(px, py, width, 20);
+  const py = y(center.north) - (exportMode ? 15 : 10);
+  ctx.fillStyle = colors.labelBackground;
+  ctx.fillRect(px, py, width, exportMode ? 30 : 20);
   ctx.fillStyle = zone.color;
-  ctx.fillText(label, px + 6, py + 14);
+  ctx.fillText(label, px + (exportMode ? 9 : 6), py + (exportMode ? 22 : 14));
   ctx.restore();
 }
 
-function drawLegend(ctx, zones, survey, width, margin) {
+function drawLegend(ctx, zones, survey, width, margin, colors = plotColors()) {
   if (!zones.length) return;
+  const exportMode = colors.exportMode === true;
   const maxItems = Math.min(zones.length, 7);
-  const boxWidth = Math.min(185, width * 0.42);
-  const boxHeight = 12 + maxItems * 22;
+  const itemHeight = exportMode ? 31 : 22;
+  const boxWidth = Math.min(exportMode ? 270 : 185, width * 0.42);
+  const boxHeight = (exportMode ? 17 : 12) + maxItems * itemHeight;
   const left = width - margin.right - boxWidth;
   const top = margin.top + 4;
   ctx.save();
-  ctx.fillStyle = plotColors().legendBackground;
+  ctx.fillStyle = colors.legendBackground;
   ctx.strokeStyle = "rgba(143, 164, 174, 0.5)";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = exportMode ? 0.7 : 1;
   ctx.fillRect(left, top, boxWidth, boxHeight);
   ctx.strokeRect(left, top, boxWidth, boxHeight);
-  ctx.font = "700 11px Segoe UI, Arial";
+  ctx.font = `700 ${exportMode ? 18 : 12}px Segoe UI, Arial`;
   zones.slice(0, maxItems).forEach((zone, index) => {
     const analysis = survey.analyses.get(zone.id);
     const color = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
-    const y = top + 18 + index * 22;
+    const y = top + (exportMode ? 25 : 18) + index * itemHeight;
     ctx.fillStyle = color;
-    ctx.fillRect(left + 9, y - 9, 11, 11);
-    ctx.fillStyle = plotColors().legendText;
+    ctx.fillRect(left + 9, y - (exportMode ? 14 : 9), exportMode ? 15 : 11, exportMode ? 15 : 11);
+    ctx.fillStyle = colors.legendText;
     const label = zone.name.length > 22 ? `${zone.name.slice(0, 20)}...` : zone.name;
-    ctx.fillText(label, left + 27, y);
+    ctx.fillText(label, left + (exportMode ? 34 : 27), y);
   });
   ctx.restore();
 }
@@ -1658,20 +1860,183 @@ function updateStats(survey) {
   els.quickGrid.classList.toggle("is-active", state.showGrid);
 }
 
+function drawingPaperDimensions() {
+  if (state.drawingScale.paper === "CUSTOM") {
+    return {
+      width: clampNumber(state.drawingScale.customWidth, 50, 5000),
+      height: clampNumber(state.drawingScale.customHeight, 50, 5000),
+    };
+  }
+  const format = PAPER_FORMATS[state.drawingScale.paper] || PAPER_FORMATS.A3;
+  return state.drawingScale.orientation === "horizontal"
+    ? { width: format.height, height: format.width }
+    : { width: format.width, height: format.height };
+}
+
+function drawingTerrainBounds(survey) {
+  const station = { east: toNumber(state.station.east), north: toNumber(state.station.north) };
+  const points = survey.points.filter((point) => point.hasCoordinates);
+  const planPoints = [station, ...points];
+  const eastValues = planPoints.map((point) => point.east);
+  const northValues = planPoints.map((point) => point.north);
+  return {
+    minEast: Math.min(...eastValues),
+    maxEast: Math.max(...eastValues),
+    minNorth: Math.min(...northValues),
+    maxNorth: Math.max(...northValues),
+  };
+}
+
+function drawingScaleDetails(survey) {
+  const paper = drawingPaperDimensions();
+  const bounds = drawingTerrainBounds(survey);
+  const coordinateToMeters = state.units === "ft" ? 0.3048 : 1;
+  const terrainWidth = (bounds.maxEast - bounds.minEast) * coordinateToMeters;
+  const terrainHeight = (bounds.maxNorth - bounds.minNorth) * coordinateToMeters;
+  const usefulWidth = Math.max(1, paper.width - PAPER_MARGIN_MM * 2);
+  const usefulHeight = Math.max(1, paper.height - PAPER_MARGIN_MM * 2 - TITLE_BLOCK_MM);
+  const needed = Math.max(
+    (terrainWidth * 1000) / usefulWidth,
+    (terrainHeight * 1000) / usefulHeight,
+    1
+  );
+  const recommended = DRAWING_SCALES.find((denominator) => denominator >= needed) || DRAWING_SCALES.at(-1);
+  const selected = state.drawingScale.mode === "auto" ? recommended : state.drawingScale.denominator;
+  const drawingWidth = (terrainWidth * 1000) / selected;
+  const drawingHeight = (terrainHeight * 1000) / selected;
+  const fits = drawingWidth <= usefulWidth + 1e-9 && drawingHeight <= usefulHeight + 1e-9;
+  return {
+    paper,
+    bounds,
+    usefulWidth,
+    usefulHeight,
+    terrainWidth,
+    terrainHeight,
+    needed,
+    recommended,
+    selected,
+    drawingWidth,
+    drawingHeight,
+    fits,
+  };
+}
+
+function renderDrawingScale(survey) {
+  const details = drawingScaleDetails(survey);
+  if (state.drawingScale.mode === "auto") state.drawingScale.denominator = details.selected;
+  els.paperFormat.value = state.drawingScale.paper;
+  els.paperOrientation.value = state.drawingScale.orientation;
+  els.paperOrientation.disabled = state.drawingScale.paper === "CUSTOM";
+  els.customPaperFields.classList.toggle("is-hidden", state.drawingScale.paper !== "CUSTOM");
+  els.customPaperWidth.value = String(state.drawingScale.customWidth);
+  els.customPaperHeight.value = String(state.drawingScale.customHeight);
+  els.drawingScaleMode.value = state.drawingScale.mode;
+  els.drawingScale.value = String(details.selected);
+  els.drawingScale.disabled = state.drawingScale.mode === "auto";
+  const isCustom = state.drawingScale.paper === "CUSTOM";
+  const paperName = isCustom ? "Personalizado" : state.drawingScale.paper;
+  const orientation = isCustom ? "" : state.drawingScale.orientation;
+  const paperDescription = `${paperName}${orientation ? ` ${orientation}` : ""}`;
+  const fitMessage = details.fits
+    ? `El terreno cabe correctamente en ${paperDescription} a escala 1:${details.selected}.`
+    : `El terreno no cabe completamente en ${paperDescription} a escala 1:${details.selected}. Seleccione una hoja más grande o una escala con mayor denominador.`;
+  els.drawingScaleInfo.innerHTML = `
+    <span>Formato: <strong>${paperDescription}</strong></span>
+    <span>Papel: <strong>${formatNumber(details.paper.width, 0)} mm × ${formatNumber(details.paper.height, 0)} mm</strong></span>
+    <span>Terreno: <strong>${formatNumber(details.terrainWidth, 2)} m × ${formatNumber(details.terrainHeight, 2)} m</strong></span>
+    <span>Escala recomendada: <strong>1:${details.recommended}</strong></span>
+    <span>Escala seleccionada: <strong>1:${details.selected}</strong></span>
+    <span>Tamaño en papel: <strong>${formatNumber(details.drawingWidth, 2)} mm × ${formatNumber(details.drawingHeight, 2)} mm</strong></span>
+    <span>Área útil: <strong>${formatNumber(details.usefulWidth, 0)} mm × ${formatNumber(details.usefulHeight, 0)} mm</strong></span>
+    <strong class="drawing-scale-result ${details.fits ? "fits" : "does-not-fit"}">${escapeHtml(fitMessage)}</strong>`;
+}
+
+function createTechnicalPlanCanvas(survey, options = {}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1400;
+  canvas.height = 820;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const station = { east: toNumber(state.station.east), north: toNumber(state.station.north), id: "BM" };
+  const exportZones = state.zones.filter((zone) => zone.visible && (!options.focusZoneId || zone.id === options.focusZoneId));
+  const visibleZoneIds = new Set(exportZones.map((zone) => zone.id));
+  const visiblePoints = survey.points.filter((point) => point.hasCoordinates && visibleZoneIds.has(point.zoneId));
+  const eastValues = [station, ...visiblePoints].map((point) => point.east);
+  const northValues = [station, ...visiblePoints].map((point) => point.north);
+  const axisBuilder = options.tightFraming ? fittedAxis : niceAxis;
+  let eastAxis = axisBuilder(Math.min(...eastValues), Math.max(...eastValues), station.east);
+  let northAxis = axisBuilder(Math.min(...northValues), Math.max(...northValues), station.north);
+  const margin = { left: 100, right: 55, top: 78, bottom: 85 };
+  const plotW = width - margin.left - margin.right;
+  const plotH = height - margin.top - margin.bottom;
+  ({ eastAxis, northAxis } = balancedAxes(eastAxis, northAxis, plotW, plotH, station));
+  const x = (east) => margin.left + ((east - eastAxis.min) / (eastAxis.max - eastAxis.min)) * plotW;
+  const y = (north) => margin.top + (1 - (north - northAxis.min) / (northAxis.max - northAxis.min)) * plotH;
+  const colors = plotColors(true);
+  ctx.fillStyle = colors.background;
+  ctx.fillRect(0, 0, width, height);
+  drawGrid(ctx, eastAxis, northAxis, x, y, margin, plotW, plotH, width, height, colors);
+
+  exportZones.forEach((zone) => {
+    const analysis = survey.analyses.get(zone.id);
+    const displayColor = analysis.status === "Con errores" ? "#bd3c2f" : zone.color;
+    if (state.showLines && zone.type !== "points") drawZoneGeometry(ctx, analysis, zone, displayColor, x, y, true);
+    if (state.showPoints) {
+      analysis.points.forEach((point, index) => drawPoint(
+        ctx,
+        x(point.east),
+        y(point.north),
+        state.showPointNumbers ? point.id : "",
+        displayColor,
+        false,
+        false,
+        colors,
+        outwardPointLabelPlacement(point, index, analysis, x, y)
+      ));
+    }
+    if (state.showZoneNames && !options.hideZoneLabels && analysis.points.length) drawZoneName(ctx, analysis, zone, x, y, colors);
+  });
+  drawStationGuides(ctx, x(station.east), y(station.north), margin, plotW, plotH, true);
+  drawPoint(ctx, x(station.east), y(station.north), "", "#c64f32", true, false, colors);
+  drawTechnicalStationSummary(ctx, station, margin, colors);
+  drawLegend(ctx, exportZones, survey, width, margin, colors);
+  ctx.fillStyle = colors.text;
+  ctx.font = "700 24px Segoe UI, Arial";
+  ctx.fillText("Este (E)", margin.left + plotW - 105, height - 25);
+  ctx.fillText("Norte (N)", margin.left, 35);
+  return canvas;
+}
+
 function syncControls() {
   els.projectName.value = state.projectName;
   els.stationEast.value = state.station.east;
   els.stationNorth.value = state.station.north;
+  els.projectResponsible.value = state.projectMeta.responsible;
+  els.projectSurveyDate.value = state.projectMeta.surveyDate;
+  els.projectReviewer.value = state.projectMeta.reviewer;
+  els.projectPrintDate.value = state.projectMeta.printDate;
+  els.projectStationEast.value = state.station.east;
+  els.projectStationNorth.value = state.station.north;
   els.showLines.checked = state.showLines;
   els.showGrid.checked = state.showGrid;
   els.showZoneNames.checked = state.showZoneNames;
   els.showPointNumbers.checked = state.showPointNumbers;
-  els.autoClosePolygons.checked = state.autoClosePolygons;
   els.units.value = state.units;
   els.gridSize.value = String(state.gridSize);
   els.appearance.value = state.appearance;
   document.body.dataset.theme = state.appearance;
   els.axisDecimals.value = String(state.axisDecimals);
+  els.paperFormat.value = state.drawingScale.paper;
+  els.paperOrientation.value = state.drawingScale.orientation;
+  els.paperOrientation.disabled = state.drawingScale.paper === "CUSTOM";
+  els.customPaperFields.classList.toggle("is-hidden", state.drawingScale.paper !== "CUSTOM");
+  els.customPaperWidth.value = String(state.drawingScale.customWidth);
+  els.customPaperHeight.value = String(state.drawingScale.customHeight);
+  els.drawingScaleMode.value = state.drawingScale.mode;
+  els.drawingScale.value = String(state.drawingScale.denominator);
+  els.drawingScale.disabled = state.drawingScale.mode === "auto";
+  els.distanceHeader.textContent = `Distancia (${unitSymbol()})`;
   renderProjectList();
   renderProjectsView();
   updateUndoButtons();
@@ -1679,6 +2044,7 @@ function syncControls() {
 
 function update(renderTable = true) {
   const survey = computeSurvey();
+  els.distanceHeader.textContent = `Distancia (${unitSymbol()})`;
   renderZoneSelectors();
   if (renderTable) renderRows(survey);
   else renderRowOutputs(survey);
@@ -1686,6 +2052,7 @@ function update(renderTable = true) {
   renderCalculations(survey);
   renderProjectsView();
   updateStats(survey);
+  renderDrawingScale(survey);
   if (activeView === "plan") drawPlot(survey);
   saveLocalState();
   updateUndoButtons();
@@ -1950,7 +2317,12 @@ function setSample() {
 }
 
 function safeFileName(name) {
-  return normalizeProjectName(name).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase();
+  return normalizeProjectName(name)
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .toLowerCase();
 }
 
 function downloadFile(content, filename, type) {
@@ -1977,15 +2349,19 @@ function makeTextTable(headers, rows) {
 function exportCoordinatesTxt() {
   const survey = computeSurvey();
   const points = survey.points.filter((point) => point.hasCoordinates);
-  const headers = ["Número del punto", "Coordenada Este", "Coordenada Norte", "Coordenada Z", "Descripción"];
-  const rows = points.map((point) => [
-    point.id,
+  const protectValue = (value) => {
+    const text = String(value ?? "");
+    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+  const rows = points.map((point, index) => [
+    index + 1,
     formatNumber(point.east),
     formatNumber(point.north),
-    "0",
-    point.description,
+    0,
+    state.zones.find((zone) => zone.id === point.zoneId)?.name || "",
   ]);
-  downloadFile(makeTextTable(headers, rows), `${safeFileName(state.projectName)}-coordenadas.txt`, "text/plain;charset=utf-8");
+  const content = rows.map((row) => row.map(protectValue).join(",")).join("\r\n");
+  downloadFile(`\ufeff${content}`, `TOPORAY_${safeFileName(state.projectName)}_coordenadas.txt`, "text/plain;charset=utf-8");
 }
 
 function exportCalculationProcess() {
@@ -1993,7 +2369,7 @@ function exportCalculationProcess() {
   const lines = [
     `Levantamiento: ${state.projectName}`,
     `Estación inicial: E ${formatNumber(toNumber(state.station.east))}, N ${formatNumber(toNumber(state.station.north))}`,
-    `Método: ${state.mode === "poligonal" ? "Poligonal" : "Radiación"}`,
+    `Método: ${state.mode === "poligonal" ? "Poligonal" : "Radiación simple"}`,
     "",
     "Proceso de conversión GMS, rumbos y proyecciones",
     "",
@@ -2023,7 +2399,7 @@ function exportCalculationProcess() {
     lines.push(`Estado de la figura: ${analysis.status}`);
     lines.push("");
   });
-  downloadFile(lines.join("\n"), `${safeFileName(state.projectName)}-calculos.txt`, "text/plain;charset=utf-8");
+  downloadFile(lines.join("\n"), `TOPORAY_${safeFileName(state.projectName)}_calculos.txt`, "text/plain;charset=utf-8");
 }
 
 function csvEscape(value) {
@@ -2047,7 +2423,7 @@ function exportCsv() {
     ];
   });
   const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
-  downloadFile(`\ufeff${csv}`, `${safeFileName(state.projectName)}.csv`, "text/csv;charset=utf-8");
+  downloadFile(`\ufeff${csv}`, `TOPORAY_${safeFileName(state.projectName)}.csv`, "text/csv;charset=utf-8");
 }
 
 function normalizeHeader(value) {
@@ -2149,10 +2525,11 @@ function parseCsvLine(line) {
 }
 
 function exportGraphImage() {
-  drawPlot(computeSurvey());
-  els.canvas.toBlob((blob) => {
+  const survey = computeSurvey();
+  const technicalCanvas = createTechnicalPlanCanvas(survey, { hideZoneLabels: true, tightFraming: true });
+  technicalCanvas.toBlob((blob) => {
     if (!blob) return;
-    downloadFile(blob, `${safeFileName(state.projectName)}-grafica.png`, "image/png");
+    downloadFile(blob, `TOPORAY_${safeFileName(state.projectName)}_grafica.png`, "image/png");
   }, "image/png");
 }
 
@@ -2162,26 +2539,119 @@ function escapeHtml(value) {
   })[character]);
 }
 
+function bearingComponents(azimuth) {
+  const normalized = ((azimuth % 360) + 360) % 360;
+  let northSouth = "N";
+  let eastWest = "E";
+  let angle = normalized;
+  if (normalized > 90 && normalized <= 180) {
+    northSouth = "S";
+    angle = 180 - normalized;
+  } else if (normalized > 180 && normalized <= 270) {
+    northSouth = "S";
+    eastWest = "W";
+    angle = normalized - 180;
+  } else if (normalized > 270) {
+    eastWest = "W";
+    angle = 360 - normalized;
+  }
+  return { northSouth, eastWest, ...decimalToDms(angle) };
+}
+
+function reportSegments(survey) {
+  const segments = new Map();
+  state.zones.forEach((zone) => {
+    const points = survey.analyses.get(zone.id).points;
+    points.forEach((point, index) => {
+      const next = points[index + 1] || (zone.type === "polygon" && zone.closed && points.length > 2 ? points[0] : null);
+      if (!next || zone.type === "points") return;
+      segments.set(point.uid, {
+        distance: Math.hypot(next.east - point.east, next.north - point.north),
+        label: `d${point.id || index + 1}-${next.id || (index + 2)}`,
+      });
+    });
+  });
+  return segments;
+}
+
 function printReport() {
   const survey = computeSurvey();
-  drawPlot(survey);
-  const image = els.canvas.toDataURL("image/png");
+  const scale = drawingScaleDetails(survey);
+  const mainZone = state.zones.find((zone) => zone.type === "polygon") || state.zones[0];
+  const mainAnalysis = mainZone ? survey.analyses.get(mainZone.id) : null;
+  const image = createTechnicalPlanCanvas(survey, { hideZoneLabels: true, tightFraming: true }).toDataURL("image/png");
+  const templateUrl = new URL("./assets/report-template.png", window.location.href).href;
+  const segmentByPoint = reportSegments(survey);
+  const validPoints = survey.points.filter((point) => point.hasCoordinates);
+  const totalArea = mainAnalysis?.area || 0;
+  const totalPerimeter = mainAnalysis?.measure || 0;
+  const paperName = state.drawingScale.paper === "CUSTOM" ? "Personalizado" : state.drawingScale.paper;
+  const paperOrientation = state.drawingScale.paper === "CUSTOM" ? "" : ` ${state.drawingScale.orientation}`;
+  const paperDimensions = `${formatNumber(scale.paper.width, 0)} × ${formatNumber(scale.paper.height, 0)} mm`;
   const zoneRows = state.zones.map((zone) => {
     const analysis = survey.analyses.get(zone.id);
-    return `<tr><td><span class="swatch" style="background:${escapeHtml(zone.color)}"></span>${escapeHtml(zone.name)}</td><td>${escapeHtml(zoneTypeLabel(zone.type))}</td><td>${analysis.count}</td><td>${formatNumber(analysis.area)} ${areaUnitSymbol()}</td><td>${formatNumber(analysis.measure)} ${unitSymbol()}</td><td>${escapeHtml(analysis.status)}</td></tr>`;
+    return `<tr><td>${escapeHtml(zone.name)}</td><td>${escapeHtml(zoneTypeLabel(zone.type))}</td><td>${analysis.count}</td><td>${formatNumber(analysis.area)}</td><td>${formatNumber(analysis.measure)}</td></tr>`;
   }).join("");
-  const pointRows = survey.points.filter((point) => point.hasCoordinates).map((point) => {
+  const completeRows = validPoints.map((point) => {
     const zone = state.zones.find((item) => item.id === point.zoneId);
-    return `<tr><td>${escapeHtml(zone?.name)}</td><td>${escapeHtml(point.id)}</td><td>${formatNumber(point.east)}</td><td>${formatNumber(point.north)}</td><td>0</td><td>${escapeHtml(point.description)}</td><td>${escapeHtml(point.status)}</td></tr>`;
+    const source = point.source;
+    const bearing = bearingComponents(point.azimuth);
+    const segment = segmentByPoint.get(point.uid);
+    const northProjection = point.deltaNorth >= 0 ? formatNumber(point.deltaNorth) : "";
+    const southProjection = point.deltaNorth < 0 ? formatNumber(Math.abs(point.deltaNorth)) : "";
+    const eastProjection = point.deltaEast >= 0 ? formatNumber(point.deltaEast) : "";
+    const westProjection = point.deltaEast < 0 ? formatNumber(Math.abs(point.deltaEast)) : "";
+    return `<tr>
+      <td>${escapeHtml(point.id)}</td><td>${escapeHtml(zone?.name || "")}</td><td>${escapeHtml(point.description)}</td>
+      <td>${formatPlainNumber(source.degrees, 0)}</td><td>${formatPlainNumber(source.minutes, 0)}</td><td>${formatPlainNumber(source.seconds, 3)}</td>
+      <td>${formatNumber(point.distance)}</td><td>${formatNumber(Math.sin(point.radians), 6)}</td><td>${formatNumber(Math.cos(point.radians), 6)}</td>
+      <td>${bearing.northSouth}</td><td>${bearing.degrees}</td><td>${bearing.minutes}</td><td>${formatPlainNumber(bearing.seconds, 3)}</td><td>${bearing.eastWest}</td>
+      <td>${northProjection}</td><td>${southProjection}</td><td>${eastProjection}</td><td>${westProjection}</td>
+      <td>${formatNumber(point.north)}</td><td>${formatNumber(point.east)}</td>
+      <td>${segment ? formatNumber(segment.distance) : ""}</td><td>${segment ? escapeHtml(segment.label) : ""}</td>
+    </tr>`;
   }).join("");
+  const completeInitialRow = `<tr class="initial-row"><td>BM</td><td>Referencia</td><td>Coordenada inicial</td><td colspan="15"></td><td>${formatNumber(toNumber(state.station.north))}</td><td>${formatNumber(toNumber(state.station.east))}</td><td colspan="2"></td></tr>`;
   const popup = window.open("", "_blank", "width=1100,height=800");
   if (!popup) {
     showToast("El navegador bloqueó la ventana de impresión. Permita las ventanas emergentes e inténtelo de nuevo.", true);
     return;
   }
-  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(state.projectName)}</title><style>
-    @page{size:landscape;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;color:#182126;margin:0}h1{font-size:22px;margin:0 0 4px}p{margin:3px 0 14px;color:#5d6d76}.layout{display:grid;grid-template-columns:42% 58%;gap:16px;align-items:start}img{width:100%;border:1px solid #cbd6da}h2{font-size:15px;margin:16px 0 7px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #cbd6da;padding:5px;text-align:left}th{background:#eaf1ef}.swatch{display:inline-block;width:10px;height:10px;margin-right:6px}@media print{button{display:none}.layout{break-inside:avoid}}button{margin-bottom:12px;padding:8px 12px}
-  </style></head><body><button onclick="window.print()">Imprimir o guardar como PDF</button><h1>${escapeHtml(state.projectName)}</h1><p>Estación inicial: E ${formatNumber(state.station.east)} / N ${formatNumber(state.station.north)}</p><div class="layout"><img src="${image}" alt="Gráfica del levantamiento"><div><h2>Resumen por zonas</h2><table><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área</th><th>Perímetro / longitud</th><th>Estado</th></tr></thead><tbody>${zoneRows}</tbody></table></div></div><h2>Coordenadas</h2><table><thead><tr><th>Zona</th><th>Punto</th><th>Este</th><th>Norte</th><th>Z</th><th>Descripción</th><th>Estado</th></tr></thead><tbody>${pointRows}</tbody></table></body></html>`);
+  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe_TOPORAY_${escapeHtml(safeFileName(state.projectName))}</title><style>
+    @page{size:letter landscape;margin:0}
+    *{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#111}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-command{position:fixed;top:8px;left:8px;z-index:20;padding:8px 12px}.report-page{position:relative;width:11in;height:8.5in;overflow:hidden;background:#fff;break-after:page}.report-page:last-of-type{break-after:auto}.template-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:fill}.report-content{position:absolute;z-index:2;top:1.34in;right:.64in;bottom:1.12in;left:.64in;overflow:hidden}h1{font-size:18px;margin:0 0 8px;line-height:1.15}h2{font-size:13px;margin:0 0 6px}.project-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 18px;margin-bottom:10px;font-size:11px;color:#263840}.project-data span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.technical-data{margin:0 0 12px;font-size:10px;line-height:1.45;color:#263840}.zone-section{margin-bottom:12px}.zone-table,.results-table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;color:#111}.zone-table{font-size:10.5px}.zone-table th,.zone-table td,.results-table th,.results-table td{border:.35px solid #111;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;background:#fff}.zone-table th,.zone-table td{padding:5px 6px;line-height:1.2}.zone-table th{font-weight:700}.zone-table td:first-child,.zone-table td:nth-child(2){text-align:left}.summary-metrics{display:grid;grid-template-columns:1.35fr repeat(3,1fr);border:.35px solid #111;margin-top:12px}.summary-metric{min-width:0;padding:9px 10px;border-right:.35px solid #111}.summary-metric:last-child{border-right:0}.summary-metric span{display:block;margin-bottom:3px;font-size:8.5px;text-transform:uppercase;color:#4a5960}.summary-metric strong{display:block;font-size:13px;overflow-wrap:anywhere}.page-subtitle{margin:-3px 0 9px;font-size:10.5px;color:#43535b}.results-page .report-content{right:.38in;left:.38in}.results-table{font-family:"Arial Narrow",Arial,sans-serif;font-size:8.6px;line-height:1.08}.results-table th,.results-table td{border:.3px solid #111;padding:3px 1px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;background:#fff}.results-table thead th{font-size:8.4px;font-weight:700}.results-table td:nth-child(2),.results-table td:nth-child(3){text-align:left}.initial-row td{height:21px;font-weight:600}.report-total{margin-top:7px;text-align:right;font-size:10px;font-weight:700}.graph-page .report-content{top:1.28in;right:.44in;bottom:1.02in;left:.44in}.graph-content{display:flex;flex-direction:column}.graph-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:6px}.graph-heading h1{margin:0}.graph-meta{margin:0;color:#263840;font-size:9px;text-align:right}.plan-image{display:block;width:100%;height:5.72in;border:.35px solid #111;object-fit:contain;background:#fff}@media screen{html,body{width:auto;min-height:100%;background:#dfe5e7}body{display:grid;gap:16px;padding:48px 16px 16px}.report-page{margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.18)}}@media print{.print-command{display:none}body{display:block;padding:0}.report-page{margin:0}}
+  </style></head><body><button class="print-command" onclick="window.print()">Imprimir o guardar como PDF</button>
+    <main class="report-page summary-page">
+      <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
+      <section class="report-content">
+        <h1>${escapeHtml(state.projectName)}</h1>
+        <div class="project-data"><span><strong>Fecha del levantamiento:</strong> ${escapeHtml(formatDateValue(state.projectMeta.surveyDate))}</span><span><strong>Responsable:</strong> ${escapeHtml(state.projectMeta.responsible || "No registrado")}</span><span><strong>Revisor:</strong> ${escapeHtml(state.projectMeta.reviewer || "No registrado")}</span><span><strong>Fecha de impresión:</strong> ${escapeHtml(formatDateValue(state.projectMeta.printDate || todayIsoDate()))}</span></div>
+        <p class="technical-data"><strong>Método:</strong> Radiación simple · <strong>Formato:</strong> ${paperName}${paperOrientation} · <strong>Dimensiones:</strong> ${paperDimensions} · <strong>Escala:</strong> 1:${scale.selected} · <strong>BM:</strong> E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p>
+        <section class="zone-section"><h2>Resumen por zonas y terrenos</h2><table class="zone-table"><thead><tr><th>Zona</th><th>Tipo</th><th>Puntos</th><th>Área (${areaUnitSymbol()})</th><th>Perímetro / longitud (${unitSymbol()})</th></tr></thead><tbody>${zoneRows || '<tr><td colspan="5">No hay zonas registradas.</td></tr>'}</tbody></table></section>
+        <div class="summary-metrics"><div class="summary-metric"><span>Terreno principal</span><strong>${escapeHtml(mainZone?.name || "No registrado")}</strong></div><div class="summary-metric"><span>Puntos calculados</span><strong>${validPoints.length}</strong></div><div class="summary-metric"><span>Área principal</span><strong>${formatNumber(totalArea)} ${areaUnitSymbol()}</strong></div><div class="summary-metric"><span>Perímetro principal</span><strong>${formatNumber(totalPerimeter)} ${unitSymbol()}</strong></div></div>
+      </section>
+    </main>
+    <main class="report-page results-page">
+      <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
+      <section class="report-content">
+        <h1>Puntos y resultados</h1>
+        <p class="page-subtitle">Informe completo: observaciones, azimut, rumbo, proyecciones, coordenadas y perímetro.</p>
+        <table class="results-table complete-table">
+          <colgroup><col style="width:3%"><col style="width:7%"><col style="width:9%"><col style="width:3%"><col style="width:2.5%"><col style="width:3.5%"><col style="width:4.5%"><col style="width:5%"><col style="width:5%"><col style="width:2.6%"><col style="width:2.8%"><col style="width:2.5%"><col style="width:3.5%"><col style="width:2.6%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:4%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:9.5%"></colgroup>
+          <thead><tr><th rowspan="2">Punto</th><th colspan="2">DATOS</th><th colspan="3">AZIMUT</th><th rowspan="2">DIST.</th><th rowspan="2">E-Sen-W</th><th rowspan="2">N-Cos-S</th><th colspan="5">RUMBO</th><th colspan="4">PROYECCIONES</th><th colspan="2">COORDENADAS</th><th colspan="2">PERÍMETRO</th></tr><tr><th>Zona</th><th>Descripción</th><th>GG</th><th>MM</th><th>SS</th><th>N-S</th><th>gg</th><th>mm</th><th>ss</th><th>E-W</th><th>N(+)</th><th>S(-)</th><th>E(+)</th><th>W(-)</th><th>N</th><th>E</th><th>Dist.</th><th>d[P-P(+1)]</th></tr></thead>
+          <tbody>${completeInitialRow}${completeRows || '<tr><td colspan="22">No hay puntos calculados.</td></tr>'}</tbody>
+        </table>
+        <div class="report-total">Perímetro del terreno principal: ${formatNumber(totalPerimeter)} ${unitSymbol()}</div>
+      </section>
+    </main>
+    <main class="report-page graph-page">
+      <img class="template-background" src="${escapeHtml(templateUrl)}" alt="Plantilla del informe">
+      <section class="report-content graph-content">
+        <div class="graph-heading"><h1>Plano del levantamiento</h1><p class="graph-meta">Terreno principal y ${state.zones.filter((zone) => zone.visible && zone.id !== mainZone?.id).length} zona(s) visible(s) · Escala 1:${scale.selected} · E ${formatNumber(toNumber(state.station.east))} / N ${formatNumber(toNumber(state.station.north))}</p></div>
+        <img class="plan-image" src="${image}" alt="Plano ampliado con todas las zonas visibles">
+      </section>
+    </main>
+  </body></html>`);
   popup.document.close();
   popup.focus();
 }
@@ -2272,7 +2742,8 @@ function handleCanvasTool(event) {
     quickMode = null;
     openPointDialog(index);
   } else if (quickMode === "clear") {
-    clearPointValues(selectedPointIndex());
+    deleteObservation(selectedPointIndex());
+    quickMode = null;
   } else if (quickMode === "measure") {
     if (!measurePointUids.includes(point.uid)) measurePointUids.push(point.uid);
     if (measurePointUids.length === 2) {
@@ -2291,6 +2762,10 @@ function handleCanvasTool(event) {
 
 function openNewProjectDialog() {
   els.newProjectName.value = "Nuevo levantamiento";
+  els.newProjectResponsible.value = "";
+  els.newProjectSurveyDate.value = todayIsoDate();
+  els.newProjectReviewer.value = "";
+  els.newProjectPrintDate.value = todayIsoDate();
   els.newProjectEast.value = "";
   els.newProjectNorth.value = "";
   els.newProjectDialog.showModal();
@@ -2316,6 +2791,12 @@ function createProjectFromDialog() {
   if (projects[name] && !window.confirm(`Ya existe "${name}". ¿Desea reemplazarlo con un proyecto nuevo?`)) return;
   state = createBlankState(name);
   state.station = { east, north };
+  state.projectMeta = {
+    responsible: els.newProjectResponsible.value.trim(),
+    surveyDate: els.newProjectSurveyDate.value,
+    reviewer: els.newProjectReviewer.value.trim(),
+    printDate: els.newProjectPrintDate.value || todayIsoDate(),
+  };
   loadedProjectName = null;
   undoStack.length = 0;
   redoStack.length = 0;
@@ -2333,11 +2814,37 @@ function setZoom(factor) {
 els.stationEast.addEventListener("focus", rememberInputState);
 els.stationEast.addEventListener("input", () => {
   state.station.east = toNumber(els.stationEast.value);
+  els.projectStationEast.value = els.stationEast.value;
   update(false);
 });
 els.stationNorth.addEventListener("focus", rememberInputState);
 els.stationNorth.addEventListener("input", () => {
   state.station.north = toNumber(els.stationNorth.value);
+  els.projectStationNorth.value = els.stationNorth.value;
+  update(false);
+});
+[
+  [els.projectResponsible, "responsible"],
+  [els.projectSurveyDate, "surveyDate"],
+  [els.projectReviewer, "reviewer"],
+  [els.projectPrintDate, "printDate"],
+].forEach(([input, field]) => {
+  input.addEventListener("focus", rememberInputState);
+  input.addEventListener("input", () => {
+    state.projectMeta[field] = input.value;
+    saveLocalState();
+  });
+});
+els.projectStationEast.addEventListener("focus", rememberInputState);
+els.projectStationEast.addEventListener("input", () => {
+  state.station.east = toNumber(els.projectStationEast.value);
+  els.stationEast.value = els.projectStationEast.value;
+  update(false);
+});
+els.projectStationNorth.addEventListener("focus", rememberInputState);
+els.projectStationNorth.addEventListener("input", () => {
+  state.station.north = toNumber(els.projectStationNorth.value);
+  els.stationNorth.value = els.projectStationNorth.value;
   update(false);
 });
 els.projectName.addEventListener("focus", rememberInputState);
@@ -2385,11 +2892,6 @@ els.showPointNumbers.addEventListener("change", () => {
   state.showPointNumbers = els.showPointNumbers.checked;
   update(false);
 });
-els.autoClosePolygons.addEventListener("change", () => {
-  pushHistory();
-  state.autoClosePolygons = els.autoClosePolygons.checked;
-  update(false);
-});
 els.activeZone.addEventListener("change", () => setActiveZone(els.activeZone.value));
 els.activeZoneName.addEventListener("focus", rememberInputState);
 els.activeZoneName.addEventListener("input", () => {
@@ -2427,7 +2929,7 @@ els.activeZoneType.addEventListener("change", () => {
   const previousType = zone.type;
   zone.type = els.activeZoneType.value;
   if (zone.type !== "polygon") zone.closed = false;
-  if (zone.type === "polygon" && previousType !== "polygon") zone.closed = state.autoClosePolygons;
+  if (zone.type === "polygon" && previousType !== "polygon") zone.closed = true;
   update(true);
 });
 els.addRow.addEventListener("click", () => {
@@ -2437,6 +2939,7 @@ els.addRow.addEventListener("click", () => {
   }
   openPointDialog();
 });
+els.sortPoints.addEventListener("click", sortObservations);
 els.quickAddPoint.addEventListener("click", () => openPointDialog());
 els.cancelPoint.addEventListener("click", () => els.pointDialog.close());
 els.dismissPoint.addEventListener("click", () => els.pointDialog.close());
@@ -2448,6 +2951,7 @@ els.pointNumber.addEventListener("input", () => {
   els.pointNumber.value = els.pointNumber.value.replace(/[^0-9]/g, "");
 });
 els.pointDegrees.addEventListener("input", () => {
+  clearPointValidity();
   if (Number(els.pointDegrees.value) === 360) {
     els.pointMinutes.value = "0";
     els.pointSeconds.value = "0";
@@ -2456,6 +2960,9 @@ els.pointDegrees.addEventListener("input", () => {
   els.pointMinutes.disabled = locked;
   els.pointSeconds.disabled = locked;
 });
+els.pointMinutes.addEventListener("input", clearPointValidity);
+els.pointSeconds.addEventListener("input", clearPointValidity);
+els.pointDistance.addEventListener("input", clearPointValidity);
 els.pointZone.addEventListener("change", () => {
   if (editingPointIndex === null) els.pointNumber.value = String(nextPointNumber(els.pointZone.value));
 });
@@ -2478,7 +2985,6 @@ els.center.addEventListener("click", () => {
 });
 els.zoomIn.addEventListener("click", () => setZoom(1.25));
 els.zoomOut.addEventListener("click", () => setZoom(0.8));
-els.sample.addEventListener("click", setSample);
 els.exportCsv.addEventListener("click", exportCsv);
 els.exportProcess.addEventListener("click", exportCalculationProcess);
 els.exportTxt.addEventListener("click", exportCoordinatesTxt);
@@ -2522,6 +3028,36 @@ els.clearPointFilters.addEventListener("click", () => {
 });
 els.calculationZoneFilter.addEventListener("change", () => renderCalculations(computeSurvey()));
 els.calculationPointFilter.addEventListener("change", () => renderCalculations(computeSurvey()));
+els.paperFormat.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.paper = els.paperFormat.value;
+  update(false);
+});
+els.customPaperWidth.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.customWidth = clampNumber(els.customPaperWidth.value, 50, 5000);
+  update(false);
+});
+els.customPaperHeight.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.customHeight = clampNumber(els.customPaperHeight.value, 50, 5000);
+  update(false);
+});
+els.paperOrientation.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.orientation = els.paperOrientation.value;
+  update(false);
+});
+els.drawingScaleMode.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.mode = els.drawingScaleMode.value;
+  update(false);
+});
+els.drawingScale.addEventListener("change", () => {
+  pushHistory();
+  state.drawingScale.denominator = Number(els.drawingScale.value);
+  update(false);
+});
 els.quickSelectPoint.addEventListener("click", () => setQuickMode("select"));
 els.quickMovePoint.addEventListener("click", () => {
   const index = selectedPointIndex();
@@ -2530,7 +3066,7 @@ els.quickMovePoint.addEventListener("click", () => {
 });
 els.quickClearPoint.addEventListener("click", () => {
   const index = selectedPointIndex();
-  if (index >= 0) clearPointValues(index);
+  if (index >= 0) deleteObservation(index);
   else setQuickMode("clear");
 });
 els.quickMeasure.addEventListener("click", () => {
