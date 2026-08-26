@@ -240,7 +240,8 @@
             <div class="file-actions-grid">
               <label class="file-action file-button"><span class="file-action-icon" aria-hidden="true">↑</span><strong>Importar CSV</strong><small>Cargar puntos y zonas desde un archivo.</small><input id="importFile" type="file" accept=".csv,text/csv" /></label>
               <button id="exportBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">↓</span><strong>Exportar CSV</strong><small>Observaciones y resultados tabulados.</small></button>
-              <button id="exportCoordinatesBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">≡</span><strong>Coordenadas CSV</strong><small>Lista continua compatible con Civil 3D.</small></button>
+              <button id="exportTxtBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">≡</span><strong>Coordenadas CSV</strong><small>Lista continua compatible con Civil 3D.</small></button>
+              <span id="exportCoordinatesBtn" hidden aria-hidden="true"></span>
               <button id="exportProcessBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">ƒ</span><strong>Exportar cálculos</strong><small>Proceso GMS, rumbos y proyecciones.</small></button>
               <button id="exportImageBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">▧</span><strong>Gráfica PNG</strong><small>Imagen del plano actual.</small></button>
               <button id="printReportBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">▤</span><strong>Informe PDF</strong><small>Informe completo para imprimir o guardar.</small></button>
@@ -417,6 +418,6 @@
       </tr>
     </template>
 
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20260826-1"></script>
   </body>
 </html>

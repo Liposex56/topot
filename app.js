@@ -31,7 +31,7 @@ const els = {
   zoomOut: document.querySelector("#zoomOutBtn"),
   exportCsv: document.querySelector("#exportBtn"),
   exportProcess: document.querySelector("#exportProcessBtn"),
-  exportCoordinates: document.querySelector("#exportCoordinatesBtn"),
+  exportCoordinates: document.querySelector("#exportTxtBtn, #exportCoordinatesBtn"),
   exportImage: document.querySelector("#exportImageBtn"),
   printReport: document.querySelector("#printReportBtn"),
   importFile: document.querySelector("#importFile"),
@@ -2987,7 +2987,7 @@ els.zoomIn.addEventListener("click", () => setZoom(1.25));
 els.zoomOut.addEventListener("click", () => setZoom(0.8));
 els.exportCsv.addEventListener("click", exportCsv);
 els.exportProcess.addEventListener("click", exportCalculationProcess);
-els.exportCoordinates.addEventListener("click", exportCoordinatesCsv);
+els.exportCoordinates?.addEventListener("click", exportCoordinatesCsv);
 els.exportImage.addEventListener("click", exportGraphImage);
 els.printReport.addEventListener("click", printReport);
 els.importFile.addEventListener("change", () => {
