@@ -31,7 +31,7 @@ const els = {
   zoomOut: document.querySelector("#zoomOutBtn"),
   exportCsv: document.querySelector("#exportBtn"),
   exportProcess: document.querySelector("#exportProcessBtn"),
-  exportTxt: document.querySelector("#exportTxtBtn"),
+  exportCoordinates: document.querySelector("#exportCoordinatesBtn"),
   exportImage: document.querySelector("#exportImageBtn"),
   printReport: document.querySelector("#printReportBtn"),
   importFile: document.querySelector("#importFile"),
@@ -2346,7 +2346,7 @@ function makeTextTable(headers, rows) {
   ].join("\n");
 }
 
-function exportCoordinatesTxt() {
+function exportCoordinatesCsv() {
   const survey = computeSurvey();
   const points = survey.points.filter((point) => point.hasCoordinates);
   const protectValue = (value) => {
@@ -2361,7 +2361,7 @@ function exportCoordinatesTxt() {
     state.zones.find((zone) => zone.id === point.zoneId)?.name || "",
   ]);
   const content = rows.map((row) => row.map(protectValue).join(",")).join("\r\n");
-  downloadFile(`\ufeff${content}`, `TOPORAY_${safeFileName(state.projectName)}_coordenadas.txt`, "text/plain;charset=utf-8");
+  downloadFile(`\ufeff${content}`, `TOPORAY_${safeFileName(state.projectName)}_coordenadas.csv`, "text/csv;charset=utf-8");
 }
 
 function exportCalculationProcess() {
@@ -2987,7 +2987,7 @@ els.zoomIn.addEventListener("click", () => setZoom(1.25));
 els.zoomOut.addEventListener("click", () => setZoom(0.8));
 els.exportCsv.addEventListener("click", exportCsv);
 els.exportProcess.addEventListener("click", exportCalculationProcess);
-els.exportTxt.addEventListener("click", exportCoordinatesTxt);
+els.exportCoordinates.addEventListener("click", exportCoordinatesCsv);
 els.exportImage.addEventListener("click", exportGraphImage);
 els.printReport.addEventListener("click", printReport);
 els.importFile.addEventListener("change", () => {
