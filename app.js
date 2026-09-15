@@ -1,6 +1,7 @@
 const STORAGE_KEY = "levantamientos-topograficos-v1";
 const PROJECTS_KEY = "levantamientos-topograficos-projects-v1";
 const CURRENT_PROJECT_KEY = "levantamientos-topograficos-current-project-v1";
+const MANUAL_NOTICE_KEY = "toporay-manual-notice-v1";
 const HISTORY_LIMIT = 60;
 const ZONE_COLORS = ["#0b6b5d", "#2962a3", "#d36b22", "#6d7378", "#8a4f9e", "#b13f4b"];
 const PAPER_FORMATS = {
@@ -143,6 +144,8 @@ const els = {
   customReferenceFields: document.querySelector("#customReferenceFields"),
   cancelZone: document.querySelector("#cancelZoneBtn"),
   dismissZone: document.querySelector("#dismissZoneBtn"),
+  manualNoticeDialog: document.querySelector("#manualNoticeDialog"),
+  dismissManualNotice: document.querySelector("#dismissManualNoticeBtn"),
   toast: document.querySelector("#toast"),
 };
 
@@ -2287,6 +2290,26 @@ function showToast(message, error = false) {
   showToast.timer = window.setTimeout(() => els.toast.classList.remove("is-visible"), 3200);
 }
 
+function openManualNotice() {
+  if (!els.manualNoticeDialog) return;
+  try {
+    if (sessionStorage.getItem(MANUAL_NOTICE_KEY) === "acknowledged") return;
+  } catch {
+    // The notice still opens when session storage is unavailable.
+  }
+  window.setTimeout(() => {
+    if (!els.manualNoticeDialog.open) els.manualNoticeDialog.showModal();
+  }, 0);
+}
+
+function acknowledgeManualNotice() {
+  try {
+    sessionStorage.setItem(MANUAL_NOTICE_KEY, "acknowledged");
+  } catch {
+    // Closing the notice must not depend on browser storage permissions.
+  }
+}
+
 function setSample() {
   const currentName = state.projectName;
   pushHistory();
@@ -2346,22 +2369,26 @@ function makeTextTable(headers, rows) {
   ].join("\n");
 }
 
-function exportCoordinatesCsv() {
+function exportCoordinatesTxt() {
   const survey = computeSurvey();
   const points = survey.points.filter((point) => point.hasCoordinates);
-  const protectValue = (value) => {
-    const text = String(value ?? "");
-    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-  };
+  if (!points.length) {
+    showToast("No hay puntos calculados para exportar.", true);
+    return;
+  }
+  const sanitizeDescription = (value) => String(value ?? "")
+    .replace(/[,\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const rows = points.map((point, index) => [
     index + 1,
     formatNumber(point.east),
     formatNumber(point.north),
     0,
-    state.zones.find((zone) => zone.id === point.zoneId)?.name || "",
+    sanitizeDescription(point.description),
   ]);
-  const content = rows.map((row) => row.map(protectValue).join(",")).join("\r\n");
-  downloadFile(`\ufeff${content}`, `TOPORAY_${safeFileName(state.projectName)}_coordenadas.csv`, "text/csv;charset=utf-8");
+  const content = rows.map((row) => row.join(",")).join("\r\n");
+  downloadFile(content, `TOPORAY_${safeFileName(state.projectName)}_coordenadas.txt`, "text/plain;charset=utf-8");
 }
 
 function exportCalculationProcess() {
@@ -2987,7 +3014,8 @@ els.zoomIn.addEventListener("click", () => setZoom(1.25));
 els.zoomOut.addEventListener("click", () => setZoom(0.8));
 els.exportCsv.addEventListener("click", exportCsv);
 els.exportProcess.addEventListener("click", exportCalculationProcess);
-els.exportCoordinates?.addEventListener("click", exportCoordinatesCsv);
+els.exportCoordinates?.addEventListener("click", exportCoordinatesTxt);
+els.dismissManualNotice?.addEventListener("click", acknowledgeManualNotice);
 els.exportImage.addEventListener("click", exportGraphImage);
 els.printReport.addEventListener("click", printReport);
 els.importFile.addEventListener("change", () => {
@@ -3129,3 +3157,4 @@ els.canvas.addEventListener("pointercancel", endDrag);
 window.addEventListener("resize", () => drawPlot(computeSurvey()));
 
 load();
+openManualNotice();

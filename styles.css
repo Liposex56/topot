@@ -1339,6 +1339,30 @@ td select {
   margin-top: 18px;
 }
 
+.manual-notice-dialog {
+  width: min(570px, calc(100vw - 28px));
+}
+
+.manual-notice-copy {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.manual-notice-callout {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.manual-notice-actions {
+  align-items: center;
+  justify-content: space-between;
+}
+
 .point-form-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

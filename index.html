@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#111a1f" />
     <title>TOPORAY | Radiación simple</title>
     <link rel="icon" type="image/svg+xml" href="./assets/toporay-symbol.svg" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260915-1" />
   </head>
   <body data-theme="dark">
     <div class="app-shell">
@@ -240,7 +240,7 @@
             <div class="file-actions-grid">
               <label class="file-action file-button"><span class="file-action-icon" aria-hidden="true">↑</span><strong>Importar CSV</strong><small>Cargar puntos y zonas desde un archivo.</small><input id="importFile" type="file" accept=".csv,text/csv" /></label>
               <button id="exportBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">↓</span><strong>Exportar CSV</strong><small>Observaciones y resultados tabulados.</small></button>
-              <button id="exportTxtBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">≡</span><strong>Coordenadas CSV</strong><small>Lista continua compatible con Civil 3D.</small></button>
+              <button id="exportTxtBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">≡</span><strong>Coordenadas TXT</strong><small>Formato PENZD sin encabezado para Civil 3D.</small></button>
               <span id="exportCoordinatesBtn" hidden aria-hidden="true"></span>
               <button id="exportProcessBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">ƒ</span><strong>Exportar cálculos</strong><small>Proceso GMS, rumbos y proyecciones.</small></button>
               <button id="exportImageBtn" class="file-action" type="button"><span class="file-action-icon" aria-hidden="true">▧</span><strong>Gráfica PNG</strong><small>Imagen del plano actual.</small></button>
@@ -401,6 +401,23 @@
       </form>
     </dialog>
 
+    <dialog id="manualNoticeDialog" class="app-dialog manual-notice-dialog" aria-labelledby="manualNoticeTitle">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <div class="dialog-brand">
+            <img class="dialog-brand-symbol" src="./assets/toporay-symbol-dark.svg" alt="Logo de TOPORAY" />
+            <div><p class="section-kicker">Antes de comenzar</p><h2 id="manualNoticeTitle">Revise el Manual de usuario</h2></div>
+          </div>
+        </div>
+        <p class="manual-notice-copy">Antes de registrar o importar un levantamiento, consulte el manual. Allí encontrará el procedimiento completo, las validaciones de los datos y la forma correcta de exportar las coordenadas para Civil 3D.</p>
+        <div class="manual-notice-callout"><strong>Importante:</strong> para Civil 3D use el archivo de coordenadas TXT y seleccione el formato PENZD delimitado por comas.</div>
+        <div class="dialog-actions manual-notice-actions">
+          <a class="button-link" href="./output/pdf/Manual_de_usuario_TOPORAY_v1.0.pdf" target="_blank" rel="noopener">Abrir manual de usuario</a>
+          <button id="dismissManualNoticeBtn" class="primary-button" value="confirm" type="submit">Entendido</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <template id="rowTemplate">
@@ -418,6 +435,6 @@
       </tr>
     </template>
 
-    <script src="./app.js?v=20260826-1"></script>
+    <script src="./app.js?v=20260915-1"></script>
   </body>
 </html>
