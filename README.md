@@ -27,7 +27,7 @@ Después abra `http://127.0.0.1:5175` en el navegador.
 - Deshacer y rehacer cambios, incluido el borrado de valores.
 - Guardado local compatible con proyectos de la versión anterior.
 - Importación y exportación CSV con información de zonas.
-- Exportación de coordenadas TXT en formato PENZD y lista continua, compatible con Civil 3D, y cálculos por zona.
+- Exportación de coordenadas TXT en formato PENZD y lista continua, con aviso obligatorio antes de cada descarga para revisar el manual de Civil 3D.
 - Exportación de la gráfica como imagen e informe sobre la plantilla institucional para impresión o PDF.
 - Gráfica cuadrada con leyenda, zoom y desplazamiento.
 - Interfaz técnica oscura con barra de herramientas agrupada.

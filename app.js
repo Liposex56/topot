@@ -159,6 +159,7 @@ let quickMode = null;
 let measurePointUids = [];
 let plotTransform = null;
 let dragState = null;
+let pendingCoordinatesTxtExport = false;
 const undoStack = [];
 const redoStack = [];
 
@@ -2290,16 +2291,19 @@ function showToast(message, error = false) {
   showToast.timer = window.setTimeout(() => els.toast.classList.remove("is-visible"), 3200);
 }
 
-function openManualNotice() {
-  if (!els.manualNoticeDialog) return;
-  try {
-    if (sessionStorage.getItem(MANUAL_NOTICE_KEY) === "acknowledged") return;
-  } catch {
-    // The notice still opens when session storage is unavailable.
+function openManualNotice(force = false) {
+  if (!els.manualNoticeDialog) return false;
+  if (!force) {
+    try {
+      if (sessionStorage.getItem(MANUAL_NOTICE_KEY) === "acknowledged") return false;
+    } catch {
+      // The notice still opens when session storage is unavailable.
+    }
   }
   window.setTimeout(() => {
     if (!els.manualNoticeDialog.open) els.manualNoticeDialog.showModal();
   }, 0);
+  return true;
 }
 
 function acknowledgeManualNotice() {
@@ -2308,6 +2312,24 @@ function acknowledgeManualNotice() {
   } catch {
     // Closing the notice must not depend on browser storage permissions.
   }
+}
+
+function requestCoordinatesTxtExport() {
+  if (!els.manualNoticeDialog) {
+    exportCoordinatesTxt();
+    return;
+  }
+  pendingCoordinatesTxtExport = true;
+  els.dismissManualNotice.textContent = "Descargar TXT";
+  openManualNotice(true);
+}
+
+function confirmManualNotice() {
+  const shouldExport = pendingCoordinatesTxtExport;
+  pendingCoordinatesTxtExport = false;
+  acknowledgeManualNotice();
+  els.dismissManualNotice.textContent = "Entendido";
+  if (shouldExport) window.setTimeout(exportCoordinatesTxt, 0);
 }
 
 function setSample() {
@@ -3014,8 +3036,12 @@ els.zoomIn.addEventListener("click", () => setZoom(1.25));
 els.zoomOut.addEventListener("click", () => setZoom(0.8));
 els.exportCsv.addEventListener("click", exportCsv);
 els.exportProcess.addEventListener("click", exportCalculationProcess);
-els.exportCoordinates?.addEventListener("click", exportCoordinatesTxt);
-els.dismissManualNotice?.addEventListener("click", acknowledgeManualNotice);
+els.exportCoordinates?.addEventListener("click", requestCoordinatesTxtExport);
+els.dismissManualNotice?.addEventListener("click", confirmManualNotice);
+els.manualNoticeDialog?.addEventListener("cancel", () => {
+  pendingCoordinatesTxtExport = false;
+  els.dismissManualNotice.textContent = "Entendido";
+});
 els.exportImage.addEventListener("click", exportGraphImage);
 els.printReport.addEventListener("click", printReport);
 els.importFile.addEventListener("change", () => {
